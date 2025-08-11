@@ -208,7 +208,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         if (!imageFile) return;
 
         setIsGenerating(true);
-        const errorHint = "切换网络可能解决此问题。";
+        const errorHint = "可能的原因：1. 你的网络连接存在问题 2. 达到了API调用频率限制";
 
         try {
             const formData = new FormData();
@@ -296,8 +296,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             toast({ 
                 variant: "destructive", 
-                title: "错误", 
-                description: `生成深度图时出错: ${errorMessage}. ${errorHint}`
+                title: "生成深度图时出错", 
+                description: errorHint
             });
             setIsGenerating(false);
         }
@@ -351,7 +351,3 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
-
-    
-
-    
