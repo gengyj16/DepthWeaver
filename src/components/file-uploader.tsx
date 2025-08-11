@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, ChangeEvent, DragEvent, ReactNode } from 'react';
@@ -100,9 +101,9 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     return (
         <Card className="w-full max-w-2xl bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl shadow-black/20">
             <CardHeader>
-                <CardTitle className="text-3xl font-bold text-center">创建您的3D场景</CardTitle>
+                <CardTitle className="text-3xl font-bold text-center">空间照片构建器</CardTitle>
                 <CardDescription className="text-center">
-                    请上传一张彩色图片及其对应的深度图。
+                    请上传一张照片及其对应的深度图。
                 </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6">
@@ -111,7 +112,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         id="image-upload" 
                         onFileSelect={setImageFile} 
                         acceptedFile={imageFile} 
-                        label="彩色图片" 
+                        label="照片" 
                         description=""
                         icon={<FileImage className="w-10 h-10 mb-3 text-muted-foreground" />}
                     />

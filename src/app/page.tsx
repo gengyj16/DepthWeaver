@@ -59,8 +59,7 @@ export default function HomePage() {
 
   return (
     <main className="relative h-screen w-full overflow-hidden bg-background text-foreground">
-      <header className="absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-between items-center">
-         <h1 className="text-xl sm:text-2xl font-bold font-headline text-primary">空间照片构建器</h1>
+      <header className="absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-end items-center">
          {image && depthMap && (
            <Button variant="outline" onClick={handleReset} className="bg-background/50 hover:bg-muted/80 backdrop-blur-sm">
              <ArrowLeft className="mr-2 h-4 w-4" />
