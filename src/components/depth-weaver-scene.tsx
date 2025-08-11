@@ -150,7 +150,12 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
         setIsLoading(false);
     });
     const textureLoader = new THREE.TextureLoader(loadingManager);
-    const colorTexture = textureLoader.load(image);
+    const colorTexture = textureLoader.load(image, (texture) => {
+        if (meshRef.current) {
+            const aspect = texture.image.naturalWidth / texture.image.naturalHeight;
+            meshRef.current.scale.set(aspect, 1, 1);
+        }
+    });
     const depthTexture = textureLoader.load(depthMap);
     
     colorTexture.colorSpace = THREE.SRGBColorSpace;
@@ -238,6 +243,8 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
       materialRef.current = material;
       
       const plane = new THREE.Mesh(geometry, material);
+      const aspect = colorTexture.image ? colorTexture.image.naturalWidth / colorTexture.image.naturalHeight : 1;
+      plane.scale.set(aspect, 1, 1);
       scene.add(plane);
       meshRef.current = plane;
       keyRef.current = meshDetail;
@@ -315,3 +322,4 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
     </>
   );
 }
+ 
