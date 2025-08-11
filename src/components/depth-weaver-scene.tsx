@@ -229,7 +229,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
       colorTexture.dispose();
       depthTexture.dispose();
     };
-  }, [image, depthMap, meshDetail, blurIntensity]);
+  }, [image, depthMap, meshDetail]);
 
   return (
     <>
