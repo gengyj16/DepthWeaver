@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { UploadCloud, FileImage, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast"
 
 interface FileUploaderProps {
     onFilesSelected: (image: File, depthMap: File) => void;
@@ -111,6 +112,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [depthMapFile, setDepthMapFile] = useState<File | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const { toast } = useToast();
 
     const handleSubmit = () => {
         if (imageFile && depthMapFile) {
@@ -145,8 +147,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         setIsGenerating(true);
         try {
             const API_URL = 'https://depth-anything-depth-anything-v2.hf.space';
-            let requestData;
-
+            
             // 使用上传的文件处理
             const dataURL = await readFileAsDataURL(imageFile);
             const blob = dataURLtoBlob(dataURL);
@@ -168,15 +169,12 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             const uploadResult = await uploadResponse.json();
             
             // 使用上传后的文件路径
-            requestData = {
-                data: [{ path: uploadResult[0].path }],
-                fn_index: 0, // as per API usage
-                session_hash: "vgs5qgdhg6" // as per API usage
+            const requestData = {
+                data: [{ path: uploadResult[0] }]
             };
-            
 
             // Step 1: Initiate the process and get event_id
-            const postResponse = await fetch(`${API_URL}/run/on_submit`, {
+            const postResponse = await fetch(`${API_URL}/call/on_submit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestData)
@@ -194,47 +192,38 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             }
 
             // Step 2: Poll the event stream for the result
-            const eventSource = new EventSource(`${API_URL}/queue/join?event_id=${eventId}&session_hash=vgs5qgdhg6`);
+            const eventSource = new EventSource(`${API_URL}/call/on_submit/${eventId}`);
             
-            eventSource.onmessage = (event) => {
-                const message = JSON.parse(event.data);
-
-                if (message.msg === 'process_completed') {
-                    if (message.success && message.output.data) {
-                        const outputData = message.output.data;
-                         if (outputData && Array.isArray(outputData)) {
-                            const image2 = outputData[1];
-                            if(image2 && image2.url){
-                                const resultUrl = `${API_URL}/file=${image2.url.replace('/file=', '')}`;
-                                console.log("Generated Depth Map URL:", resultUrl);
-                                // Here you can fetch the resultUrl and set it as depthMapFile
-                            }
-                        }
-                    } else {
-                         console.error("生成失败:", message.output);
-                         alert('深度图生成失败。');
+            eventSource.addEventListener('complete', (event: MessageEvent) => {
+                const dataStr = event.data.replace(/^data: /, '');
+                const message = JSON.parse(dataStr);
+                
+                if (message && Array.isArray(message)) {
+                    const image2 = message[1];
+                    if(image2 && image2.url){
+                        const resultUrl = image2.url.replace('/cal', '');
+                        console.log("Generated Depth Map URL:", resultUrl);
+                        // Here you can fetch the resultUrl and set it as depthMapFile
                     }
-                    eventSource.close();
-                    setIsGenerating(false);
-                } else if (message.msg === 'process_starts') {
-                    console.log('开始生成...');
-                } else if (message.msg === 'process_generating') {
-                     // You could show progress here if available
+                } else {
+                     console.error("生成失败:", message);
+                     toast({ variant: "destructive", title: "错误", description: "深度图生成失败。" });
                 }
-            };
-            
+                eventSource.close();
+                setIsGenerating(false);
+            });
 
             // 添加错误处理事件监听器
             eventSource.addEventListener('error', (err) => {
                 console.error("EventSource failed:", err);
                 eventSource.close();
-                alert('获取结果时发生错误。');
+                toast({ variant: "destructive", title: "错误", description: "获取结果时发生错误。" });
                 setIsGenerating(false);
             });
 
         } catch (error) {
             console.error("生成深度图时出错:", error);
-            alert(`生成深度图时出错: ${error instanceof Error ? error.message : String(error)}`);
+            toast({ variant: "destructive", title: "错误", description: `生成深度图时出错: ${error instanceof Error ? error.message : String(error)}` });
             setIsGenerating(false);
         }
     };
@@ -277,3 +266,5 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
