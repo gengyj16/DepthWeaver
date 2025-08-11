@@ -9,9 +9,10 @@ interface DepthWeaverSceneProps {
   depthMultiplier: number;
   cameraDistance: number;
   meshDetail: number;
+  blurIntensity: number;
 }
 
-export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDistance, meshDetail }: DepthWeaverSceneProps) {
+export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDistance, meshDetail, blurIntensity }: DepthWeaverSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const materialRef = useRef<THREE.ShaderMaterial>();
@@ -30,6 +31,13 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
         cameraRef.current.position.z = cameraDistance;
     }
   }, [cameraDistance]);
+
+  useEffect(() => {
+    if (materialRef.current) {
+        materialRef.current.uniforms.uBlurIntensity.value = blurIntensity;
+    }
+  }, [blurIntensity]);
+
 
   useEffect(() => {
     if (!mountRef.current || !image || !depthMap) return;
@@ -69,6 +77,8 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
           uTexture: { value: colorTexture },
           uDepthMap: { value: depthTexture },
           uDepthMultiplier: { value: depthMultiplier },
+          uBlurIntensity: { value: blurIntensity },
+          uResolution: { value: new THREE.Vector2(currentMount.clientWidth, currentMount.clientHeight) }
         },
         vertexShader: `
           uniform sampler2D uDepthMap;
@@ -86,10 +96,51 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
         `,
         fragmentShader: `
           uniform sampler2D uTexture;
+          uniform sampler2D uDepthMap;
+          uniform float uBlurIntensity;
+          uniform vec2 uResolution;
           varying vec2 vUv;
+
+          float getDepth(vec2 uv) {
+            return texture2D(uDepthMap, uv).r;
+          }
           
           void main() {
-            gl_FragColor = texture2D(uTexture, vUv);
+            float pixelSizeX = 1.0 / uResolution.x;
+            float pixelSizeY = 1.0 / uResolution.y;
+
+            float depth = getDepth(vUv);
+            float depthN = getDepth(vUv + vec2(0.0, pixelSizeY));
+            float depthS = getDepth(vUv - vec2(0.0, pixelSizeY));
+            float depthE = getDepth(vUv + vec2(pixelSizeX, 0.0));
+            float depthW = getDepth(vUv - vec2(pixelSizeX, 0.0));
+
+            float dx = abs(depthE - depthW);
+            float dy = abs(depthN - depthS);
+            float gradient = smoothstep(0.0, 0.05, max(dx, dy));
+
+            if (gradient > 0.1 && uBlurIntensity > 0.0) {
+              vec4 blurredColor = vec4(0.0);
+              float totalWeight = 0.0;
+              float blurStrength = gradient * uBlurIntensity;
+
+              for (int x = -4; x <= 4; x++) {
+                for (int y = -4; y <= 4; y++) {
+                  float offsetX = float(x) * pixelSizeX * blurStrength;
+                  float offsetY = float(y) * pixelSizeY * blurStrength;
+                  vec2 sampleUV = vUv + vec2(offsetX, offsetY);
+                  
+                  // Gaussian weight
+                  float weight = exp(-(float(x*x + y*y) / (2.0 * 16.0)));
+                  
+                  blurredColor += texture2D(uTexture, sampleUV) * weight;
+                  totalWeight += weight;
+                }
+              }
+              gl_FragColor = blurredColor / totalWeight;
+            } else {
+              gl_FragColor = texture2D(uTexture, vUv);
+            }
           }
         `,
       });
@@ -148,6 +199,9 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
       camera.aspect = currentMount.clientWidth / currentMount.clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
+      if (materialRef.current) {
+        materialRef.current.uniforms.uResolution.value.set(currentMount.clientWidth, currentMount.clientHeight);
+      }
     };
     window.addEventListener('resize', handleResize);
 
@@ -175,7 +229,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
       colorTexture.dispose();
       depthTexture.dispose();
     };
-  }, [image, depthMap, meshDetail]);
+  }, [image, depthMap, meshDetail, blurIntensity]);
 
   return (
     <>

@@ -15,6 +15,7 @@ export default function HomePage() {
   const [depthMultiplier, setDepthMultiplier] = useState(0.3);
   const [cameraDistance, setCameraDistance] = useState(1);
   const [meshDetail, setMeshDetail] = useState(1024);
+  const [blurIntensity, setBlurIntensity] = useState(1.0);
 
   const handleFilesChange = (imageFile: File, depthMapFile: File) => {
     const imageUrl = URL.createObjectURL(imageFile);
@@ -53,7 +54,7 @@ export default function HomePage() {
       
       {image && depthMap ? (
         <>
-          <DepthWeaverScene key={key} image={image} depthMap={depthMap} depthMultiplier={depthMultiplier} cameraDistance={cameraDistance} meshDetail={meshDetail} />
+          <DepthWeaverScene key={key} image={image} depthMap={depthMap} depthMultiplier={depthMultiplier} cameraDistance={cameraDistance} meshDetail={meshDetail} blurIntensity={blurIntensity} />
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-80 p-4 bg-background/50 backdrop-blur-sm rounded-lg shadow-lg">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
@@ -87,6 +88,17 @@ export default function HomePage() {
                   step={256}
                   value={[meshDetail]}
                   onValueChange={(value) => setMeshDetail(value[0])}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="blur-slider" className="text-center">模糊强度: {blurIntensity.toFixed(2)}</Label>
+                <Slider
+                  id="blur-slider"
+                  min={0}
+                  max={5}
+                  step={0.1}
+                  value={[blurIntensity]}
+                  onValueChange={(value) => setBlurIntensity(value[0])}
                 />
               </div>
             </div>
