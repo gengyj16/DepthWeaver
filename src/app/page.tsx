@@ -129,21 +129,22 @@ export default function HomePage() {
                 className="w-80"
               >
                 <div className="flex justify-end">
-                  <CollapsibleTrigger asChild>
-                    {isControlsOpen ? (
-                       <Button variant="ghost" className="w-full bg-background/50 hover:bg-muted/80 backdrop-blur-sm p-2 h-auto">
-                          <span className="text-sm font-medium">控制面板</span>
-                          <ChevronsUpDown className="h-4 w-4 ml-2" />
-                      </Button>
-                    ) : (
-                      <Button variant="outline" size="icon" className="rounded-full h-12 w-12 bg-background/50 hover:bg-muted/80 backdrop-blur-sm shadow-lg">
-                        <Settings className="h-6 w-6" />
-                      </Button>
-                    )}
-                  </CollapsibleTrigger>
+                   {!isControlsOpen && (
+                     <CollapsibleTrigger asChild>
+                        <Button variant="outline" size="icon" className="rounded-full h-12 w-12 bg-background/50 hover:bg-muted/80 backdrop-blur-sm shadow-lg">
+                          <Settings className="h-6 w-6" />
+                        </Button>
+                     </CollapsibleTrigger>
+                   )}
                 </div>
                 <CollapsibleContent>
-                    <div className={`p-4 bg-background/50 backdrop-blur-sm rounded-lg shadow-lg transition-all animate-in ${isControlsOpen ? 'fade-in' : 'fade-out'}`}>
+                    <div className="p-4 bg-background/50 backdrop-blur-sm rounded-lg shadow-lg">
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" className="w-full mb-4 bg-transparent hover:bg-background/20">
+                            <span className="text-sm font-medium">控制面板</span>
+                            <ChevronsUpDown className="h-4 w-4 ml-2" />
+                        </Button>
+                      </CollapsibleTrigger>
                       <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm bg-background/30">
                           <Label htmlFor="sensor-mode" className="font-semibold">
