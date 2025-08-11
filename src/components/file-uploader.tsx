@@ -125,11 +125,11 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
                                     </DialogDescription>
                                 </DialogHeader>
                                 <div className="grid gap-4 py-4">
-                                    <div className="grid grid-cols-4 items-center gap-4">
-                                        <Label htmlFor="api-url" className="text-right col-span-4 text-left font-bold">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="api-url" className="font-bold">
                                             高级设置
                                         </Label>
-                                        <Label htmlFor="api-url" className="text-right">
+                                         <Label htmlFor="api-url">
                                             API 地址
                                         </Label>
                                         <Input
@@ -137,7 +137,6 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
                                             value={apiUrl}
                                             onChange={(e) => setApiUrl(e.target.value)}
                                             placeholder={defaultApiUrl}
-                                            className="col-span-3"
                                         />
                                     </div>
                                 </div>
