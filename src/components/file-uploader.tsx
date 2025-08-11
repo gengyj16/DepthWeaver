@@ -333,8 +333,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
 
     return (
         <Card className="w-full max-w-2xl bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl shadow-black/20">
-            <CardHeader className="text-center">
-                <div className="flex justify-end items-center -mb-8">
+            <CardHeader className="text-center relative">
+                 <div className="absolute top-4 right-4">
                     <Link href="/about" passHref>
                         <Button variant="ghost" size="icon">
                             <Info className="h-5 w-5" />
