@@ -17,6 +17,7 @@ import {
 import { HistoryList, type HistoryEntry } from '@/components/history';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 export default function HomePage() {
   const [image, setImage] = useState<string | null>(null);
@@ -104,30 +105,33 @@ export default function HomePage() {
     };
   }, [image, depthMap]);
 
+  const isSceneVisible = image && depthMap;
+
   return (
-    <main className="relative h-screen w-full overflow-y-auto bg-background text-foreground">
-      {backgroundMode === 'blur' && image && (
-        <div 
-          className="absolute inset-0 w-full h-full z-0 bg-cover bg-center"
-          style={{ 
-            backgroundImage: `url(${image})`,
-            filter: `blur(36px)`,
-            transform: 'scale(1.1)'
-          }}
-        />
-      )}
-      <div className="relative z-10 h-screen w-full flex-shrink-0">
-        <header className="absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-end items-center">
-          {image && depthMap && (
-            <Button variant="outline" onClick={handleReset} className="bg-background/50 hover:bg-muted/80 backdrop-blur-sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              返回
-            </Button>
+    <main className={cn(
+      "relative w-full bg-background text-foreground",
+      isSceneVisible ? "h-screen overflow-hidden" : "min-h-screen"
+    )}>
+      {isSceneVisible ? (
+        <>
+          {backgroundMode === 'blur' && image && (
+            <div 
+              className="absolute inset-0 w-full h-full z-0 bg-cover bg-center"
+              style={{ 
+                backgroundImage: `url(${image})`,
+                filter: `blur(36px)`,
+                transform: 'scale(1.1)'
+              }}
+            />
           )}
-        </header>
-        
-        {image && depthMap ? (
-          <>
+          <div className="relative z-10 h-full w-full">
+            <header className="absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-end items-center">
+                <Button variant="outline" onClick={handleReset} className="bg-background/50 hover:bg-muted/80 backdrop-blur-sm">
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  返回
+                </Button>
+            </header>
+            
             <DepthWeaverScene 
               key={key} 
               image={image} 
@@ -141,7 +145,8 @@ export default function HomePage() {
               backgroundMode={backgroundMode}
               backgroundColor={backgroundColor}
             />
-             <div className="absolute bottom-6 right-6 z-20">
+
+            <div className="absolute bottom-6 right-6 z-20">
               <Collapsible
                 open={isControlsOpen}
                 onOpenChange={setIsControlsOpen}
@@ -270,25 +275,20 @@ export default function HomePage() {
                 </CollapsibleContent>
               </Collapsible>
             </div>
-          </>
-        ) : (
-          <div className="flex items-center justify-center h-full w-full px-4">
-            <FileUploader onFilesSelected={handleFilesChange} />
           </div>
-        )}
-      </div>
-      
-      {!image && !depthMap && history.length > 0 && (
-         <div className="w-full bg-background border-t">
-          <HistoryList 
-            history={history}
-            onLoad={handleLoadFromHistory}
-            onDelete={handleDeleteFromHistory}
-          />
+        </>
+      ) : (
+        <div className="flex flex-col items-center justify-center w-full px-4 py-8 gap-8">
+            <FileUploader onFilesSelected={handleFilesChange} />
+            {history.length > 0 && (
+              <HistoryList 
+                history={history}
+                onLoad={handleLoadFromHistory}
+                onDelete={handleDeleteFromHistory}
+              />
+            )}
         </div>
       )}
     </main>
   );
 }
-
-    
