@@ -63,7 +63,7 @@ export default function HomePage() {
          {image && depthMap && (
            <Button variant="outline" onClick={handleReset} className="bg-background/50 hover:bg-muted/80 backdrop-blur-sm">
              <ArrowLeft className="mr-2 h-4 w-4" />
-             上传新的
+             返回
            </Button>
          )}
       </header>
