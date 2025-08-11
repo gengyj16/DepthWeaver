@@ -145,9 +145,9 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         if (!imageFile) return;
 
         setIsGenerating(true);
+        const API_URL = 'https://depth-anything-depth-anything-v2.hf.space';
+
         try {
-            const API_URL = 'https://depth-anything-depth-anything-v2.hf.space';
-            
             // 使用上传的文件处理
             const dataURL = await readFileAsDataURL(imageFile);
             const blob = dataURLtoBlob(dataURL);
@@ -194,23 +194,39 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             // Step 2: Poll the event stream for the result
             const eventSource = new EventSource(`${API_URL}/call/on_submit/${eventId}`);
             
-            eventSource.addEventListener('complete', (event: MessageEvent) => {
+            eventSource.addEventListener('complete', async (event: MessageEvent) => {
                 const dataStr = event.data.replace(/^data: /, '');
                 const message = JSON.parse(dataStr);
+                eventSource.close();
+                setIsGenerating(false);
                 
                 if (message && Array.isArray(message)) {
                     const image2 = message[1];
                     if(image2 && image2.url){
-                        const resultUrl = image2.url.replace('/cal', '');
-                        console.log("Generated Depth Map URL:", resultUrl);
-                        // Here you can fetch the resultUrl and set it as depthMapFile
+                        const resultUrlPath = image2.url.replace('/cal', '');
+                        const fullResultUrl = `${API_URL}/file=${resultUrlPath}`;
+                        
+                        try {
+                            const imageResponse = await fetch(fullResultUrl);
+                            if (!imageResponse.ok) {
+                                throw new Error(`下载深度图失败，状态码: ${imageResponse.status}`);
+                            }
+                            const imageBlob = await imageResponse.blob();
+                            const generatedFile = new File([imageBlob], "generated-depth-map.png", { type: imageBlob.type });
+                            setDepthMapFile(generatedFile);
+                            toast({ title: "成功", description: "深度图已生成并载入。" });
+                        } catch(e) {
+                             if (e instanceof Error) {
+                                toast({ variant: "destructive", title: "错误", description: `下载生成的深度图时出错: ${e.message}` });
+                            }
+                        }
+                    } else {
+                        toast({ variant: "destructive", title: "错误", description: "API返回结果中未找到深度图URL。" });
                     }
                 } else {
                      console.error("生成失败:", message);
                      toast({ variant: "destructive", title: "错误", description: "深度图生成失败。" });
                 }
-                eventSource.close();
-                setIsGenerating(false);
             });
 
             // 添加错误处理事件监听器
