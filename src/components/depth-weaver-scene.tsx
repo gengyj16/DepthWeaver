@@ -12,9 +12,10 @@ interface DepthWeaverSceneProps {
   meshDetail: number;
   blurIntensity: number;
   viewAngleLimit: number;
+  useSensor: boolean;
 }
 
-export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDistance, meshDetail, blurIntensity, viewAngleLimit }: DepthWeaverSceneProps) {
+export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDistance, meshDetail, blurIntensity, viewAngleLimit, useSensor }: DepthWeaverSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const materialRef = useRef<THREE.ShaderMaterial>();
@@ -25,6 +26,8 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
   
   const isDraggingRef = useRef(false);
   const previousPointerPosition = useRef({ x: 0, y: 0 });
+  
+  const initialOrientationRef = useRef<{ beta: number | null, gamma: number | null }>({ beta: null, gamma: null });
 
   useEffect(() => {
     if (materialRef.current) {
@@ -48,6 +51,84 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
     maxAngleRef.current = THREE.MathUtils.degToRad(viewAngleLimit);
   }, [viewAngleLimit]);
 
+  const onPointerMove = (event: PointerEvent) => {
+      if (!isDraggingRef.current || !meshRef.current || useSensor) return;
+      const deltaX = event.clientX - previousPointerPosition.current.x;
+      const deltaY = event.clientY - previousPointerPosition.current.y;
+
+      const maxAngle = maxAngleRef.current;
+      meshRef.current.rotation.y = THREE.MathUtils.clamp(meshRef.current.rotation.y + deltaX * 0.005, -maxAngle, maxAngle);
+      meshRef.current.rotation.x = THREE.MathUtils.clamp(meshRef.current.rotation.x + deltaY * 0.005, -maxAngle, maxAngle);
+
+      previousPointerPosition.current.x = event.clientX;
+      previousPointerPosition.current.y = event.clientY;
+  };
+
+  const onPointerUp = () => {
+      isDraggingRef.current = false;
+      if (mountRef.current) mountRef.current.style.cursor = 'grab';
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+  };
+  
+  const onPointerDown = (event: PointerEvent) => {
+      if(useSensor) return;
+      event.preventDefault();
+      isDraggingRef.current = true;
+      previousPointerPosition.current.x = event.clientX;
+      previousPointerPosition.current.y = event.clientY;
+      if (mountRef.current) mountRef.current.style.cursor = 'grabbing';
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+  };
+
+  const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
+      if (!meshRef.current || !event.beta || !event.gamma) return;
+  
+      if (initialOrientationRef.current.beta === null || initialOrientationRef.current.gamma === null) {
+        initialOrientationRef.current = { beta: event.beta, gamma: event.gamma };
+      }
+      
+      const beta = event.beta - initialOrientationRef.current.beta;  // Front-back tilt
+      const gamma = event.gamma - initialOrientationRef.current.gamma; // Left-right tilt
+
+      const maxAngle = maxAngleRef.current;
+      
+      // We are mapping beta to x-axis rotation and gamma to y-axis.
+      // The multipliers can be adjusted for sensitivity.
+      meshRef.current.rotation.x = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(beta * -0.5), -maxAngle, maxAngle);
+      meshRef.current.rotation.y = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(gamma * -0.5), -maxAngle, maxAngle);
+  };
+
+
+  useEffect(() => {
+    const currentMount = mountRef.current;
+    if (useSensor) {
+      if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+        (DeviceOrientationEvent as any).requestPermission()
+          .then((permissionState: string) => {
+            if (permissionState === 'granted') {
+              window.addEventListener('deviceorientation', handleDeviceOrientation);
+            }
+          });
+      } else {
+        window.addEventListener('deviceorientation', handleDeviceOrientation);
+      }
+      if(currentMount) currentMount.style.cursor = 'default';
+    } else {
+      initialOrientationRef.current = { beta: null, gamma: null };
+      if (meshRef.current) {
+         // Gently reset rotation
+        meshRef.current.rotation.x = 0;
+        meshRef.current.rotation.y = 0;
+      }
+       if(currentMount) currentMount.style.cursor = 'grab';
+    }
+
+    return () => {
+      window.removeEventListener('deviceorientation', handleDeviceOrientation);
+    }
+  }, [useSensor]);
 
   useEffect(() => {
     if (!mountRef.current || !image || !depthMap) return;
@@ -98,7 +179,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
           void main() {
             vUv = uv;
             vec4 depthColor = texture2D(uDepthMap, uv);
-            float depth = 1.0 - depthColor.r;
+            float depth = depthColor.r;
             float displacement = depth * uDepthMultiplier;
             vec3 newPosition = position + normal * displacement;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
@@ -112,7 +193,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
           varying vec2 vUv;
 
           float getDepth(vec2 uv) {
-            return 1.0 - texture2D(uDepthMap, uv).r;
+            return texture2D(uDepthMap, uv).r;
           }
           
           void main() {
@@ -171,38 +252,12 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
         materialRef.current.needsUpdate = true;
     }
 
-    const onPointerMove = (event: PointerEvent) => {
-        if (!isDraggingRef.current || !meshRef.current) return;
-        const deltaX = event.clientX - previousPointerPosition.current.x;
-        const deltaY = event.clientY - previousPointerPosition.current.y;
-
-        const maxAngle = maxAngleRef.current;
-        meshRef.current.rotation.y = THREE.MathUtils.clamp(meshRef.current.rotation.y + deltaX * 0.005, -maxAngle, maxAngle);
-        meshRef.current.rotation.x = THREE.MathUtils.clamp(meshRef.current.rotation.x + deltaY * 0.005, -maxAngle, maxAngle);
-
-        previousPointerPosition.current.x = event.clientX;
-        previousPointerPosition.current.y = event.clientY;
-    };
-
-    const onPointerUp = () => {
-        isDraggingRef.current = false;
-        currentMount.style.cursor = 'grab';
-        window.removeEventListener('pointermove', onPointerMove);
-        window.removeEventListener('pointerup', onPointerUp);
-    };
-    
-    const onPointerDown = (event: PointerEvent) => {
-        event.preventDefault();
-        isDraggingRef.current = true;
-        previousPointerPosition.current.x = event.clientX;
-        previousPointerPosition.current.y = event.clientY;
-        currentMount.style.cursor = 'grabbing';
-        window.addEventListener('pointermove', onPointerMove);
-        window.addEventListener('pointerup', onPointerUp);
-    };
-
     currentMount.addEventListener('pointerdown', onPointerDown);
-    currentMount.style.cursor = 'grab';
+    if (!useSensor) {
+      currentMount.style.cursor = 'grab';
+    } else {
+      currentMount.style.cursor = 'default';
+    }
 
     const handleResize = () => {
       camera.aspect = currentMount.clientWidth / currentMount.clientHeight;
@@ -227,7 +282,8 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
       // Clean up window listeners just in case
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
-      
+      window.removeEventListener('deviceorientation', handleDeviceOrientation);
+
       if (meshRef.current) {
         scene.remove(meshRef.current);
       }

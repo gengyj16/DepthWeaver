@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, ChevronsUpDown } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
+import { Switch } from "@/components/ui/switch"
 import {
   Collapsible,
   CollapsibleContent,
@@ -23,6 +24,14 @@ export default function HomePage() {
   const [blurIntensity, setBlurIntensity] = useState(1.0);
   const [viewAngleLimit, setViewAngleLimit] = useState(15);
   const [isControlsOpen, setIsControlsOpen] = useState(true);
+  const [useSensor, setUseSensor] = useState(false);
+  const [sensorSupported, setSensorSupported] = useState(true);
+
+  useEffect(() => {
+    if (typeof window.DeviceOrientationEvent === 'undefined') {
+      setSensorSupported(false);
+    }
+  }, []);
 
   const handleFilesChange = (imageFile: File, depthMapFile: File) => {
     const imageUrl = URL.createObjectURL(imageFile);
@@ -61,7 +70,17 @@ export default function HomePage() {
       
       {image && depthMap ? (
         <>
-          <DepthWeaverScene key={key} image={image} depthMap={depthMap} depthMultiplier={depthMultiplier} cameraDistance={cameraDistance} meshDetail={meshDetail} blurIntensity={blurIntensity} viewAngleLimit={viewAngleLimit} />
+          <DepthWeaverScene 
+            key={key} 
+            image={image} 
+            depthMap={depthMap} 
+            depthMultiplier={depthMultiplier} 
+            cameraDistance={cameraDistance} 
+            meshDetail={meshDetail} 
+            blurIntensity={blurIntensity} 
+            viewAngleLimit={viewAngleLimit}
+            useSensor={useSensor}
+          />
           <Collapsible
             open={isControlsOpen}
             onOpenChange={setIsControlsOpen}
@@ -77,6 +96,19 @@ export default function HomePage() {
             </div>
             <CollapsibleContent className="p-4 bg-background/50 backdrop-blur-sm rounded-b-lg shadow-lg">
                 <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm bg-background/30">
+                    <Label htmlFor="sensor-mode" className="font-semibold">
+                      遵循传感器方向
+                    </Label>
+                    <Switch
+                      id="sensor-mode"
+                      checked={useSensor}
+                      onCheckedChange={setUseSensor}
+                      disabled={!sensorSupported}
+                    />
+                  </div>
+                   {!sensorSupported && <p className="text-xs text-center text-destructive">您的设备不支持方向传感器。</p>}
+
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
                     <Slider 
