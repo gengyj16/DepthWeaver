@@ -67,7 +67,7 @@ export default function HomePage() {
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="zoom-slider" className="text-center">缩放: {cameraDistance.toFixed(2)}</Label>
+                <Label htmlFor="zoom-slider" className="text-center">距离: {cameraDistance.toFixed(2)}</Label>
                 <Slider
                   id="zoom-slider"
                   min={0.5}
