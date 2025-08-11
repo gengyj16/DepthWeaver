@@ -209,6 +209,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
 
         setIsGenerating(true);
         const errorHint = "可能的原因：1. 你的网络连接存在问题 2. 达到了API调用频率限制";
+        let eventSource: EventSource | null = null;
 
         try {
             const formData = new FormData();
@@ -248,17 +249,17 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 throw new Error('无法从初始响应中获取event_id。');
             }
 
-            const eventSource = new EventSource(`${effectiveApiUrl}/queue/data?session_hash=${eventId}`);
+            eventSource = new EventSource(`${effectiveApiUrl}/queue/data?session_hash=${eventId}`);
             
             eventSource.onmessage = async (event) => {
                 const data = JSON.parse(event.data);
 
                 if (data.msg === 'process_completed') {
-                    eventSource.close();
+                    if (eventSource) eventSource.close();
                     setIsGenerating(false);
 
                     const output = data.output.data;
-                    if (output && Array.isArray(output) && output.length > 1) {
+                    if (output && Array.isArray(output) && output.length > 1 && output[1].path) {
                          const resultUrlPath = output[1].path;
                          const fullResultUrl = `${effectiveApiUrl}/file=${resultUrlPath}`;
                         
@@ -286,18 +287,19 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
 
             eventSource.onerror = (err) => {
                 console.error("EventSource failed:", err);
-                eventSource.close();
+                if (eventSource) eventSource.close();
                 toast({ variant: "destructive", title: "错误", description: `获取结果时发生错误。 ${errorHint}` });
                 setIsGenerating(false);
             };
 
         } catch (error) {
+            if (eventSource) eventSource.close();
             console.error("生成深度图时出错:", error);
             const errorMessage = error instanceof Error ? error.message : String(error);
             toast({ 
                 variant: "destructive", 
                 title: "生成深度图时出错", 
-                description: errorHint
+                description: `${errorMessage}. ${errorHint}` 
             });
             setIsGenerating(false);
         }
@@ -351,3 +353,5 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
