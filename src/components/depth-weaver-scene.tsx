@@ -144,6 +144,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     currentMount.appendChild(renderer.domElement);
 
     const loadingManager = new THREE.LoadingManager(() => {
@@ -184,7 +185,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
           void main() {
             vUv = uv;
             vec4 depthColor = texture2D(uDepthMap, uv);
-            float depth = depthColor.r;
+            float depth = 1.0 - depthColor.r;
             float displacement = depth * uDepthMultiplier;
             vec3 newPosition = position + normal * displacement;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
