@@ -36,7 +36,6 @@ export function DepthWeaverScene({
   const meshRef = useRef<THREE.Mesh>();
   const sceneRef = useRef<THREE.Scene>();
   const rendererRef = useRef<THREE.WebGLRenderer>();
-  const keyRef = useRef(meshDetail);
   const maxAngleRef = useRef(THREE.MathUtils.degToRad(viewAngleLimit));
   
   const isDraggingRef = useRef(false);
@@ -67,19 +66,27 @@ export function DepthWeaverScene({
   }, [viewAngleLimit]);
 
   useEffect(() => {
-      if (sceneRef.current) {
+      if (sceneRef.current && rendererRef.current) {
           if (backgroundMode === 'solid') {
               sceneRef.current.background = new THREE.Color(backgroundColor);
           } else {
-              // Setting to null will make it transparent, showing the blurred div behind.
               sceneRef.current.background = null; 
           }
-      }
-      if (rendererRef.current) {
-        // Ensure renderer's alpha setting matches the mode
-        rendererRef.current.setClearAlpha(backgroundMode === 'blur' ? 0 : 1);
+          rendererRef.current.setClearAlpha(backgroundMode === 'blur' ? 0 : 1);
       }
   }, [backgroundMode, backgroundColor]);
+
+  // Effect for updating mesh detail
+  useEffect(() => {
+    if (meshRef.current) {
+      setIsLoading(true);
+      // Dispose the old geometry to free up memory
+      meshRef.current.geometry.dispose();
+      // Create and assign the new geometry
+      meshRef.current.geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
+      setIsLoading(false);
+    }
+  }, [meshDetail]);
 
   const onPointerMove = (event: PointerEvent) => {
       if (!isDraggingRef.current || !meshRef.current || useSensor) return;
@@ -124,8 +131,6 @@ export function DepthWeaverScene({
 
       const maxAngle = maxAngleRef.current;
       
-      // We are mapping beta to x-axis rotation and gamma to y-axis.
-      // The multipliers can be adjusted for sensitivity.
       meshRef.current.rotation.x = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(beta * -0.5), -maxAngle, maxAngle);
       meshRef.current.rotation.y = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(gamma * -0.5), -maxAngle, maxAngle);
   };
@@ -148,7 +153,6 @@ export function DepthWeaverScene({
     } else {
       initialOrientationRef.current = { beta: null, gamma: null };
       if (meshRef.current) {
-         // Gently reset rotation
         meshRef.current.rotation.x = 0;
         meshRef.current.rotation.y = 0;
       }
@@ -190,113 +194,92 @@ export function DepthWeaverScene({
         setIsLoading(false);
     });
     const textureLoader = new THREE.TextureLoader(loadingManager);
-    const colorTexture = textureLoader.load(image, (texture) => {
-        if (meshRef.current) {
-            const aspect = texture.image.naturalWidth / texture.image.naturalHeight;
-            meshRef.current.scale.set(aspect, 1, 1);
-        }
-    });
+    const colorTexture = textureLoader.load(image);
     const depthTexture = textureLoader.load(depthMap);
-    
-    // Create geometry and material
-    if (!meshRef.current || keyRef.current !== meshDetail) {
-      if (meshRef.current) {
-        scene.remove(meshRef.current);
-        meshRef.current.geometry.dispose();
-      }
 
-      const geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
-      const material = materialRef.current || new THREE.ShaderMaterial({
-        uniforms: {
-          uTexture: { value: colorTexture },
-          uDepthMap: { value: depthTexture },
-          uDepthMultiplier: { value: depthMultiplier },
-          uBlurIntensity: { value: blurIntensity },
-          uResolution: { value: new THREE.Vector2(currentMount.clientWidth, currentMount.clientHeight) }
-        },
-        vertexShader: `
-          uniform sampler2D uDepthMap;
-          uniform float uDepthMultiplier;
-          varying vec2 vUv;
-          
-          void main() {
-            vUv = uv;
-            vec4 depthColor = texture2D(uDepthMap, uv);
-            float depth = depthColor.r;
-            float displacement = depth * uDepthMultiplier;
-            vec3 newPosition = position + normal * displacement;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
-          }
-        `,
-        fragmentShader: `
-          uniform sampler2D uTexture;
-          uniform sampler2D uDepthMap;
-          uniform float uBlurIntensity;
-          uniform vec2 uResolution;
-          varying vec2 vUv;
+    const geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTexture: { value: colorTexture },
+        uDepthMap: { value: depthTexture },
+        uDepthMultiplier: { value: depthMultiplier },
+        uBlurIntensity: { value: blurIntensity },
+        uResolution: { value: new THREE.Vector2(currentMount.clientWidth, currentMount.clientHeight) }
+      },
+      vertexShader: `
+        uniform sampler2D uDepthMap;
+        uniform float uDepthMultiplier;
+        varying vec2 vUv;
+        
+        void main() {
+          vUv = uv;
+          vec4 depthColor = texture2D(uDepthMap, uv);
+          float depth = depthColor.r;
+          float displacement = depth * uDepthMultiplier;
+          vec3 newPosition = position + normal * displacement;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D uTexture;
+        uniform sampler2D uDepthMap;
+        uniform float uBlurIntensity;
+        uniform vec2 uResolution;
+        varying vec2 vUv;
 
-          float getDepth(vec2 uv) {
-            return texture2D(uDepthMap, uv).r;
-          }
-          
-          void main() {
-            float pixelSizeX = 1.0 / uResolution.x;
-            float pixelSizeY = 1.0 / uResolution.y;
+        float getDepth(vec2 uv) {
+          return texture2D(uDepthMap, uv).r;
+        }
+        
+        void main() {
+          float pixelSizeX = 1.0 / uResolution.x;
+          float pixelSizeY = 1.0 / uResolution.y;
 
-            float depth = getDepth(vUv);
-            float depthN = getDepth(vUv + vec2(0.0, pixelSizeY));
-            float depthS = getDepth(vUv - vec2(0.0, pixelSizeY));
-            float depthE = getDepth(vUv + vec2(pixelSizeX, 0.0));
-            float depthW = getDepth(vUv - vec2(pixelSizeX, 0.0));
+          float depth = getDepth(vUv);
+          float depthN = getDepth(vUv + vec2(0.0, pixelSizeY));
+          float depthS = getDepth(vUv - vec2(0.0, pixelSizeY));
+          float depthE = getDepth(vUv + vec2(pixelSizeX, 0.0));
+          float depthW = getDepth(vUv - vec2(pixelSizeX, 0.0));
 
-            float dx = abs(depthE - depthW);
-            float dy = abs(depthN - depthS);
-            float gradient = smoothstep(0.0, 0.05, max(dx, dy));
+          float dx = abs(depthE - depthW);
+          float dy = abs(depthN - depthS);
+          float gradient = smoothstep(0.0, 0.05, max(dx, dy));
 
-            if (gradient > 0.1 && uBlurIntensity > 0.0) {
-              vec4 blurredColor = vec4(0.0);
-              float totalWeight = 0.0;
-              float blurStrength = gradient * uBlurIntensity;
+          if (gradient > 0.1 && uBlurIntensity > 0.0) {
+            vec4 blurredColor = vec4(0.0);
+            float totalWeight = 0.0;
+            float blurStrength = gradient * uBlurIntensity;
 
-              for (int x = -4; x <= 4; x++) {
-                for (int y = -4; y <= 4; y++) {
-                  float offsetX = float(x) * pixelSizeX * blurStrength;
-                  float offsetY = float(y) * pixelSizeY * blurStrength;
-                  vec2 sampleUV = vUv + vec2(offsetX, offsetY);
-                  
-                  // Gaussian weight
-                  float weight = exp(-(float(x*x + y*y) / (2.0 * 16.0)));
-                  
-                  blurredColor += texture2D(uTexture, sampleUV) * weight;
-                  totalWeight += weight;
-                }
+            for (int x = -4; x <= 4; x++) {
+              for (int y = -4; y <= 4; y++) {
+                float offsetX = float(x) * pixelSizeX * blurStrength;
+                float offsetY = float(y) * pixelSizeY * blurStrength;
+                vec2 sampleUV = vUv + vec2(offsetX, offsetY);
+                
+                float weight = exp(-(float(x*x + y*y) / (2.0 * 16.0)));
+                
+                blurredColor += texture2D(uTexture, sampleUV) * weight;
+                totalWeight += weight;
               }
-              gl_FragColor = blurredColor / totalWeight;
-            } else {
-              gl_FragColor = texture2D(uTexture, vUv);
             }
+            gl_FragColor = blurredColor / totalWeight;
+          } else {
+            gl_FragColor = texture2D(uTexture, vUv);
           }
-        `,
-      });
-      materialRef.current = material;
-      
-      const plane = new THREE.Mesh(geometry, material);
-      const aspect = colorTexture.image ? colorTexture.image.naturalWidth / colorTexture.image.naturalHeight : 1;
-      plane.scale.set(aspect, 1, 1);
-      scene.add(plane);
-      meshRef.current = plane;
-      keyRef.current = meshDetail;
-    } else {
-        scene.add(meshRef.current);
-    }
+        }
+      `,
+    });
+    materialRef.current = material;
     
-    // Update textures
-    if (materialRef.current) {
-        materialRef.current.uniforms.uTexture.value = colorTexture;
-        materialRef.current.uniforms.uDepthMap.value = depthTexture;
-        materialRef.current.needsUpdate = true;
-    }
+    const plane = new THREE.Mesh(geometry, material);
+    textureLoader.load(image, (texture) => {
+        const aspect = texture.image.naturalWidth / texture.image.naturalHeight;
+        plane.scale.set(aspect, 1, 1);
+    });
 
+    scene.add(plane);
+    meshRef.current = plane;
+    
     currentMount.addEventListener('pointerdown', onPointerDown);
     if (!useSensor) {
       currentMount.style.cursor = 'grab';
@@ -324,13 +307,14 @@ export function DepthWeaverScene({
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
       currentMount.removeEventListener('pointerdown', onPointerDown);
-      // Clean up window listeners just in case
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('deviceorientation', handleDeviceOrientation);
 
       if (meshRef.current) {
         scene.remove(meshRef.current);
+        meshRef.current.geometry.dispose();
+        meshRef.current = undefined;
       }
       
       if (currentMount && renderer.domElement) {
@@ -340,7 +324,7 @@ export function DepthWeaverScene({
       colorTexture.dispose();
       depthTexture.dispose();
     };
-  }, [image, depthMap, meshDetail]);
+  }, [image, depthMap]);
 
   return (
     <>
