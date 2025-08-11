@@ -37,11 +37,11 @@ export function HistoryList({ history, onLoad, onDelete }: HistoryListProps) {
   }
 
   return (
-    <div className="py-8 px-4 md:px-8">
+    <div className="w-full max-w-2xl">
       <h2 className="text-2xl font-bold text-center mb-6">历史记录</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {history.map((entry) => (
-          <Card key={entry.id} className="group relative overflow-hidden">
+          <Card key={entry.id} className="group relative">
             <CardContent className="p-0">
               <div
                 className="aspect-square w-full relative cursor-pointer"
@@ -51,14 +51,13 @@ export function HistoryList({ history, onLoad, onDelete }: HistoryListProps) {
                   src={entry.image}
                   alt="History thumbnail"
                   fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="object-cover transition-transform duration-300 group-hover:scale-105 rounded-t-lg"
                 />
                 <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                   <ImageIcon className="h-12 w-12 text-white" />
                 </div>
               </div>
-              <div className="absolute top-1 right-1">
+              <div className="absolute top-2 right-2 z-10">
                  <AlertDialog>
                     <AlertDialogTrigger asChild>
                         <Button variant="destructive" size="icon" className="h-8 w-8 opacity-80 group-hover:opacity-100 transition-opacity">
@@ -79,8 +78,8 @@ export function HistoryList({ history, onLoad, onDelete }: HistoryListProps) {
                     </AlertDialogContent>
                 </AlertDialog>
               </div>
-               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                 <p className="text-xs text-white/90 truncate">
+               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 text-white rounded-b-lg">
+                 <p className="text-xs truncate">
                    {new Date(entry.createdAt).toLocaleString()}
                  </p>
                </div>
