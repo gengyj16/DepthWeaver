@@ -208,7 +208,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         if (!imageFile) return;
 
         setIsGenerating(true);
-        const errorHint = "请检查网络状况，以及是否达到API调用频率限制，切换网络可能解决。";
+        const errorHint = "切换网络可能解决此问题。";
 
         try {
             const formData = new FormData();
@@ -351,5 +351,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
 
     
