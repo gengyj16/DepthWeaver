@@ -5,8 +5,11 @@ import { useState, ChangeEvent, DragEvent, ReactNode, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { UploadCloud, FileImage, CheckCircle2, Loader2, Sparkles, Download } from 'lucide-react';
+import { UploadCloud, FileImage, Loader2, Sparkles, Download, HelpCircle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
 interface FileUploaderProps {
     onFilesSelected: (image: File, depthMap: File) => void;
@@ -20,11 +23,13 @@ interface FileInputBoxProps {
     description: string;
     icon: ReactNode;
     showGenerateButton?: boolean;
-    onGenerateClick?: () => void;
+    onGenerateClick?: (apiUrl: string) => void;
     isGenerating?: boolean;
+    apiUrl: string;
+    setApiUrl: (url: string) => void;
 }
 
-const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon, showGenerateButton, onGenerateClick, isGenerating }: FileInputBoxProps) => {
+const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon, showGenerateButton, onGenerateClick, isGenerating, apiUrl, setApiUrl }: FileInputBoxProps) => {
     const [isDragging, setIsDragging] = useState(false);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -71,23 +76,59 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
         <div className="space-y-2">
             <div className='flex items-center justify-between'>
                 <label htmlFor={id} className="block text-sm font-medium text-foreground">{label}</label>
-                {showGenerateButton && (
-                    <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={onGenerateClick} 
-                        disabled={!acceptedFile || isGenerating}
-                        className="text-xs"
-                    >
-                        {isGenerating ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <Sparkles className="mr-2 h-4 w-4" />
-                        )}
-                        生成深度图
-                    </Button>
-                )}
-                <p className='text-xs text-muted-foreground'>{description}</p>
+                <div className="flex items-center gap-2">
+                    {showGenerateButton && (
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => onGenerateClick?.(apiUrl)} 
+                            disabled={!acceptedFile || isGenerating}
+                            className="text-xs"
+                        >
+                            {isGenerating ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Sparkles className="mr-2 h-4 w-4" />
+                            )}
+                            生成深度图
+                        </Button>
+                    )}
+                     {showGenerateButton && (
+                         <Dialog>
+                            <DialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                    <HelpCircle className="h-4 w-4" />
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>关于“生成深度图”</DialogTitle>
+                                    <DialogDescription>
+                                        此功能将照片发送到 API 
+                                        <code className="mx-1 font-mono bg-muted text-foreground p-1 rounded-sm">{apiUrl}</code> 
+                                        进行处理，这是一个开源模型，你也可以查阅官方文档本地部署。
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="api-url" className="text-right col-span-4 text-left font-bold">
+                                            高级设置
+                                        </Label>
+                                        <Label htmlFor="api-url" className="text-right">
+                                            API 地址
+                                        </Label>
+                                        <Input
+                                            id="api-url"
+                                            value={apiUrl}
+                                            onChange={(e) => setApiUrl(e.target.value)}
+                                            className="col-span-3"
+                                        />
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                     )}
+                </div>
             </div>
             <label
                 htmlFor={id}
@@ -134,6 +175,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const [depthMapFile, setDepthMapFile] = useState<File | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const { toast } = useToast();
+    const [apiUrl, setApiUrl] = useState('https://depth-anything-depth-anything-v2.hf.space');
 
     const handleSubmit = () => {
         if (imageFile && depthMapFile) {
@@ -162,12 +204,10 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         return new Blob([uInt8Array], { type: contentType });
     };
 
-    const handleGenerateDepthMap = async () => {
+    const handleGenerateDepthMap = async (currentApiUrl: string) => {
         if (!imageFile) return;
 
         setIsGenerating(true);
-        const API_URL = 'https://depth-anything-depth-anything-v2.hf.space';
-
         try {
             // 使用上传的文件处理
             const dataURL = await readFileAsDataURL(imageFile);
@@ -178,7 +218,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             formData.append('files', blob, imageFile.name);
             
             // 首先上传文件
-            const uploadResponse = await fetch(`${API_URL}/upload`, {
+            const uploadResponse = await fetch(`${currentApiUrl}/upload`, {
                 method: 'POST',
                 body: formData
             });
@@ -195,7 +235,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             };
 
             // Step 1: Initiate the process and get event_id
-            const postResponse = await fetch(`${API_URL}/call/on_submit`, {
+            const postResponse = await fetch(`${currentApiUrl}/call/on_submit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestData)
@@ -213,7 +253,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             }
 
             // Step 2: Poll the event stream for the result
-            const eventSource = new EventSource(`${API_URL}/call/on_submit/${eventId}`);
+            const eventSource = new EventSource(`${currentApiUrl}/call/on_submit/${eventId}`);
             
             eventSource.addEventListener('complete', async (event: MessageEvent) => {
                 const dataStr = event.data.replace(/^data: /, '');
@@ -225,7 +265,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                     const image2 = message[1];
                     if(image2 && image2.url){
                         const resultUrlPath = image2.url.replace('/cal', '');
-                        const fullResultUrl = `${API_URL}/file=${resultUrlPath}`;
+                        const fullResultUrl = `${currentApiUrl}/file=${resultUrlPath}`;
                         
                         try {
                             const imageResponse = await fetch(fullResultUrl);
@@ -286,6 +326,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         showGenerateButton={true}
                         onGenerateClick={handleGenerateDepthMap}
                         isGenerating={isGenerating}
+                        apiUrl={apiUrl}
+                        setApiUrl={setApiUrl}
                     />
                     <FileInputBox 
                         id="depth-map-upload" 
@@ -294,6 +336,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         label="深度图 (灰度)" 
                         description="白色靠近，黑色远离"
                         icon={<UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />}
+                        apiUrl={apiUrl}
+                        setApiUrl={setApiUrl}
                     />
                 </div>
                 <Button onClick={handleSubmit} disabled={!imageFile || !depthMapFile} size="lg" className="w-full text-lg py-6">
