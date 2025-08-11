@@ -5,7 +5,7 @@ import { useState, ChangeEvent, DragEvent, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { UploadCloud, FileImage, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, FileImage, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 
 interface FileUploaderProps {
     onFilesSelected: (image: File, depthMap: File) => void;
@@ -18,9 +18,12 @@ interface FileInputBoxProps {
     label: string;
     description: string;
     icon: ReactNode;
+    showGenerateButton?: boolean;
+    onGenerateClick?: () => void;
+    isGenerating?: boolean;
 }
 
-const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon }: FileInputBoxProps) => {
+const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon, showGenerateButton, onGenerateClick, isGenerating }: FileInputBoxProps) => {
     const [isDragging, setIsDragging] = useState(false);
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -52,8 +55,24 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
 
     return (
         <div className="space-y-2">
-            <div className='flex items-baseline justify-between'>
+            <div className='flex items-center justify-between'>
                 <label htmlFor={id} className="block text-sm font-medium text-foreground">{label}</label>
+                {showGenerateButton && (
+                    <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={onGenerateClick} 
+                        disabled={!acceptedFile || isGenerating}
+                        className="text-xs"
+                    >
+                        {isGenerating ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Sparkles className="mr-2 h-4 w-4" />
+                        )}
+                        生成深度图
+                    </Button>
+                )}
                 <p className='text-xs text-muted-foreground'>{description}</p>
             </div>
             <label
@@ -91,12 +110,135 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
 export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [depthMapFile, setDepthMapFile] = useState<File | null>(null);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const handleSubmit = () => {
         if (imageFile && depthMapFile) {
             onFilesSelected(imageFile, depthMapFile);
         }
     };
+
+    const readFileAsDataURL = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = (error) => reject(error);
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const dataURLtoBlob = (dataURL: string): Blob => {
+        const parts = dataURL.split(';base64,');
+        const contentType = parts[0].split(':')[1];
+        const raw = window.atob(parts[1]);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
+        for (let i = 0; i < rawLength; ++i) {
+            uInt8Array[i] = raw.charCodeAt(i);
+        }
+        return new Blob([uInt8Array], { type: contentType });
+    };
+
+    const handleGenerateDepthMap = async () => {
+        if (!imageFile) return;
+
+        setIsGenerating(true);
+        try {
+            const API_URL = 'https://depth-anything-depth-anything-v2.hf.space';
+            let requestData;
+
+            // 使用上传的文件处理
+            const dataURL = await readFileAsDataURL(imageFile);
+            const blob = dataURLtoBlob(dataURL);
+            
+            // 创建FormData对象
+            const formData = new FormData();
+            formData.append('files', blob, imageFile.name);
+            
+            // 首先上传文件
+            const uploadResponse = await fetch(`${API_URL}/upload`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!uploadResponse.ok) {
+                throw new Error(`文件上传失败，状态码: ${uploadResponse.status}`);
+            }
+
+            const uploadResult = await uploadResponse.json();
+            
+            // 使用上传后的文件路径
+            requestData = {
+                data: [{ path: uploadResult[0].path }],
+                fn_index: 0, // as per API usage
+                session_hash: "vgs5qgdhg6" // as per API usage
+            };
+            
+
+            // Step 1: Initiate the process and get event_id
+            const postResponse = await fetch(`${API_URL}/run/on_submit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData)
+            });
+
+            if (!postResponse.ok) {
+                throw new Error(`初始请求失败，状态码: ${postResponse.status}`);
+            }
+
+            const postResult = await postResponse.json();
+            const eventId = postResult.event_id;
+
+            if (!eventId) {
+                throw new Error('无法从初始响应中获取event_id。');
+            }
+
+            // Step 2: Poll the event stream for the result
+            const eventSource = new EventSource(`${API_URL}/queue/join?event_id=${eventId}&session_hash=vgs5qgdhg6`);
+            
+            eventSource.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+
+                if (message.msg === 'process_completed') {
+                    if (message.success && message.output.data) {
+                        const outputData = message.output.data;
+                         if (outputData && Array.isArray(outputData)) {
+                            const image2 = outputData[1];
+                            if(image2 && image2.url){
+                                const resultUrl = `${API_URL}/file=${image2.url.replace('/file=', '')}`;
+                                console.log("Generated Depth Map URL:", resultUrl);
+                                // Here you can fetch the resultUrl and set it as depthMapFile
+                            }
+                        }
+                    } else {
+                         console.error("生成失败:", message.output);
+                         alert('深度图生成失败。');
+                    }
+                    eventSource.close();
+                    setIsGenerating(false);
+                } else if (message.msg === 'process_starts') {
+                    console.log('开始生成...');
+                } else if (message.msg === 'process_generating') {
+                     // You could show progress here if available
+                }
+            };
+            
+
+            // 添加错误处理事件监听器
+            eventSource.addEventListener('error', (err) => {
+                console.error("EventSource failed:", err);
+                eventSource.close();
+                alert('获取结果时发生错误。');
+                setIsGenerating(false);
+            });
+
+        } catch (error) {
+            console.error("生成深度图时出错:", error);
+            alert(`生成深度图时出错: ${error instanceof Error ? error.message : String(error)}`);
+            setIsGenerating(false);
+        }
+    };
+
 
     return (
         <Card className="w-full max-w-2xl bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl shadow-black/20">
@@ -115,6 +257,9 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         label="照片" 
                         description=""
                         icon={<FileImage className="w-10 h-10 mb-3 text-muted-foreground" />}
+                        showGenerateButton={true}
+                        onGenerateClick={handleGenerateDepthMap}
+                        isGenerating={isGenerating}
                     />
                     <FileInputBox 
                         id="depth-map-upload" 
