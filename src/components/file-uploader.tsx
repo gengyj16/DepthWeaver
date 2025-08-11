@@ -367,7 +367,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         onFileSelect={setDepthMapFile} 
                         acceptedFile={depthMapFile} 
                         label="深度图 (灰度)" 
-                        description="白色靠近，黑色远离"
+                        description="颜色从深到浅表示距离由远及近"
                         icon={<UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />}
                     />
                 </div>
