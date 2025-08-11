@@ -71,13 +71,13 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
                         <>
                             <CheckCircle2 className="w-10 h-10 mb-3 text-primary" />
                             <p className="mb-2 text-sm font-semibold max-w-full truncate px-2">{acceptedFile.name}</p>
-                            <p className="text-xs text-muted-foreground">Click or drag to change</p>
+                            <p className="text-xs text-muted-foreground">点击或拖动来更换</p>
                         </>
                     ) : (
                         <>
                             {icon}
-                            <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold text-primary">Click to upload</span> or drag & drop</p>
-                            <p className="text-xs text-muted-foreground">PNG, JPG, or WEBP</p>
+                            <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold text-primary">点击上传</span> 或拖放文件</p>
+                            <p className="text-xs text-muted-foreground">支持 PNG, JPG, 或 WEBP</p>
                         </>
                     )}
                 </div>
@@ -100,9 +100,9 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     return (
         <Card className="w-full max-w-2xl bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl shadow-black/20">
             <CardHeader>
-                <CardTitle className="text-3xl font-bold text-center">Create your 3D Scene</CardTitle>
+                <CardTitle className="text-3xl font-bold text-center">创建您的3D场景</CardTitle>
                 <CardDescription className="text-center">
-                    Upload a color image and its corresponding depth map to get started.
+                    请上传一张彩色图片及其对应的深度图。
                 </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6">
@@ -111,7 +111,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         id="image-upload" 
                         onFileSelect={setImageFile} 
                         acceptedFile={imageFile} 
-                        label="Color Image" 
+                        label="彩色图片" 
                         description=""
                         icon={<FileImage className="w-10 h-10 mb-3 text-muted-foreground" />}
                     />
@@ -119,13 +119,13 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         id="depth-map-upload" 
                         onFileSelect={setDepthMapFile} 
                         acceptedFile={depthMapFile} 
-                        label="Depth Map (Grayscale)" 
+                        label="深度图 (灰度)" 
                         description="白色靠近，黑色远离"
                         icon={<UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />}
                     />
                 </div>
                 <Button onClick={handleSubmit} disabled={!imageFile || !depthMapFile} size="lg" className="w-full text-lg py-6">
-                    Weave 3D Scene
+                    构建3D场景
                 </Button>
             </CardContent>
         </Card>

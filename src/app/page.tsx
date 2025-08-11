@@ -41,11 +41,11 @@ export default function HomePage() {
   return (
     <main className="relative h-screen w-full overflow-hidden bg-background text-foreground">
       <header className="absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-between items-center">
-         <h1 className="text-xl sm:text-2xl font-bold font-headline text-primary">Depth Weaver</h1>
+         <h1 className="text-xl sm:text-2xl font-bold font-headline text-primary">空间照片构建器</h1>
          {image && depthMap && (
            <Button variant="outline" onClick={handleReset} className="bg-background/50 hover:bg-muted/80 backdrop-blur-sm">
              <ArrowLeft className="mr-2 h-4 w-4" />
-             Upload New
+             上传新的
            </Button>
          )}
       </header>
@@ -56,7 +56,7 @@ export default function HomePage() {
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-72 p-4 bg-background/50 backdrop-blur-sm rounded-lg shadow-lg">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="depth-slider" className="text-center">Depth: {depthMultiplier.toFixed(2)}</Label>
+                <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
                 <Slider 
                   id="depth-slider"
                   min={0}
@@ -67,7 +67,7 @@ export default function HomePage() {
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="zoom-slider" className="text-center">Zoom: {cameraDistance.toFixed(2)}</Label>
+                <Label htmlFor="zoom-slider" className="text-center">缩放: {cameraDistance.toFixed(2)}</Label>
                 <Slider
                   id="zoom-slider"
                   min={0.5}

@@ -158,7 +158,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-10">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-primary mx-auto"></div>
-            <p className="mt-4 text-lg font-semibold">Weaving your 3D scene...</p>
+            <p className="mt-4 text-lg font-semibold">正在构建3D场景...</p>
           </div>
         </div>
       )}
