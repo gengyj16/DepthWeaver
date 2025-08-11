@@ -5,11 +5,12 @@ import { useState, ChangeEvent, DragEvent, ReactNode, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { UploadCloud, FileImage, Loader2, Sparkles, Download, HelpCircle } from 'lucide-react';
+import { UploadCloud, FileImage, Loader2, Sparkles, Download, HelpCircle, Info } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import Link from 'next/link';
 
 interface FileUploaderProps {
     onFilesSelected: (image: string, depthMap: string) => void;
@@ -333,9 +334,16 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     return (
         <Card className="w-full max-w-2xl bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl shadow-black/20">
             <CardHeader>
-                <CardTitle className="text-3xl font-bold text-center">空间照片构建器</CardTitle>
-                <CardDescription className="text-center">
-                    请上传一张照片及其对应的深度图。
+                <div className="flex justify-between items-center">
+                    <CardTitle className="text-3xl font-bold text-center">空间照片构建器</CardTitle>
+                    <Link href="/about" passHref>
+                        <Button variant="ghost" size="icon">
+                            <Info className="h-5 w-5" />
+                        </Button>
+                    </Link>
+                </div>
+                <CardDescription className="text-center pt-2">
+                    上传照片和深度图（Depth Map），为你创建身临其境的空间照片效果。
                 </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6">
