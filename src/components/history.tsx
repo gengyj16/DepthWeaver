@@ -50,9 +50,9 @@ export function HistoryList({ history, onLoad, onDelete }: HistoryListProps) {
                 <Image
                   src={entry.image}
                   alt="History thumbnail"
-                  layout="fill"
-                  objectFit="cover"
-                  className="transition-transform duration-300 group-hover:scale-105"
+                  fill
+                  sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                   <ImageIcon className="h-12 w-12 text-white" />
