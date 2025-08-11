@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
@@ -21,6 +22,9 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
   const meshRef = useRef<THREE.Mesh>();
   const keyRef = useRef(meshDetail);
   const maxAngleRef = useRef(THREE.MathUtils.degToRad(viewAngleLimit));
+  
+  const isDraggingRef = useRef(false);
+  const previousPointerPosition = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     if (materialRef.current) {
@@ -94,7 +98,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
           void main() {
             vUv = uv;
             vec4 depthColor = texture2D(uDepthMap, uv);
-            float depth = depthColor.r;
+            float depth = 1.0 - depthColor.r;
             float displacement = depth * uDepthMultiplier;
             vec3 newPosition = position + normal * displacement;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
@@ -108,7 +112,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
           varying vec2 vUv;
 
           float getDepth(vec2 uv) {
-            return texture2D(uDepthMap, uv).r;
+            return 1.0 - texture2D(uDepthMap, uv).r;
           }
           
           void main() {
@@ -167,38 +171,37 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
         materialRef.current.needsUpdate = true;
     }
 
-
-    let isDragging = false;
-    const previousPointerPosition = { x: 0, y: 0 };
-
-    const onPointerDown = (event: PointerEvent) => {
-        isDragging = true;
-        previousPointerPosition.x = event.clientX;
-        previousPointerPosition.y = event.clientY;
-        currentMount.style.cursor = 'grabbing';
-    };
-
     const onPointerMove = (event: PointerEvent) => {
-        if (!isDragging || !meshRef.current) return;
-        const deltaX = event.clientX - previousPointerPosition.x;
-        const deltaY = event.clientY - previousPointerPosition.y;
+        if (!isDraggingRef.current || !meshRef.current) return;
+        const deltaX = event.clientX - previousPointerPosition.current.x;
+        const deltaY = event.clientY - previousPointerPosition.current.y;
 
         const maxAngle = maxAngleRef.current;
         meshRef.current.rotation.y = THREE.MathUtils.clamp(meshRef.current.rotation.y + deltaX * 0.005, -maxAngle, maxAngle);
         meshRef.current.rotation.x = THREE.MathUtils.clamp(meshRef.current.rotation.x + deltaY * 0.005, -maxAngle, maxAngle);
 
-        previousPointerPosition.x = event.clientX;
-        previousPointerPosition.y = event.clientY;
+        previousPointerPosition.current.x = event.clientX;
+        previousPointerPosition.current.y = event.clientY;
     };
 
     const onPointerUp = () => {
-        isDragging = false;
+        isDraggingRef.current = false;
         currentMount.style.cursor = 'grab';
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+    };
+    
+    const onPointerDown = (event: PointerEvent) => {
+        event.preventDefault();
+        isDraggingRef.current = true;
+        previousPointerPosition.current.x = event.clientX;
+        previousPointerPosition.current.y = event.clientY;
+        currentMount.style.cursor = 'grabbing';
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
     };
 
     currentMount.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
     currentMount.style.cursor = 'grab';
 
     const handleResize = () => {
@@ -221,6 +224,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
       currentMount.removeEventListener('pointerdown', onPointerDown);
+      // Clean up window listeners just in case
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       
@@ -247,7 +251,11 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
           </div>
         </div>
       )}
-      <div ref={mountRef} className="absolute inset-0 w-full h-full z-0" />
+      <div 
+        ref={mountRef} 
+        className="absolute inset-0 w-full h-full z-0"
+        style={{ touchAction: 'none' }}
+      />
     </>
   );
 }
