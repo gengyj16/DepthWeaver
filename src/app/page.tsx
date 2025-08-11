@@ -33,6 +33,7 @@ export default function HomePage() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [backgroundMode, setBackgroundMode] = useState<'blur' | 'solid'>('blur');
   const [backgroundColor, setBackgroundColor] = useState('#000000');
+  const [backgroundBlur, setBackgroundBlur] = useState(20);
 
 
   useEffect(() => {
@@ -111,7 +112,7 @@ export default function HomePage() {
           className="absolute inset-0 w-full h-full z-0 bg-cover bg-center"
           style={{ 
             backgroundImage: `url(${image})`,
-            filter: 'blur(20px)',
+            filter: `blur(${backgroundBlur}px)`,
             transform: 'scale(1.1)'
           }}
         />
@@ -195,6 +196,20 @@ export default function HomePage() {
                               </div>
                             </RadioGroup>
                         </div>
+
+                        {backgroundMode === 'blur' && (
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="background-blur-slider" className="text-center">背景模糊: {backgroundBlur}px</Label>
+                            <Slider
+                              id="background-blur-slider"
+                              min={0}
+                              max={50}
+                              step={1}
+                              value={[backgroundBlur]}
+                              onValueChange={(value) => setBackgroundBlur(value[0])}
+                            />
+                          </div>
+                        )}
 
                         {backgroundMode === 'solid' && (
                           <div className="flex items-center gap-4 rounded-lg border p-3 shadow-sm bg-background/30">
