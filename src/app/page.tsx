@@ -137,8 +137,8 @@ export default function HomePage() {
               blurIntensity={blurIntensity} 
               viewAngleLimit={viewAngleLimit}
               useSensor={useSensor}
-              backgroundMode={'solid'}
-              backgroundColor={'transparent'}
+              backgroundMode={backgroundMode}
+              backgroundColor={backgroundMode === 'solid' ? backgroundColor : 'transparent'}
             />
 
             <div className="absolute bottom-6 right-6 z-20">
