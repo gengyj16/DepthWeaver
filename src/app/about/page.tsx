@@ -25,12 +25,13 @@ export default function AboutPage() {
                 <CardContent className="space-y-6">
                     <div className="space-y-2">
                         <h3 className="font-semibold">作者</h3>
-                        <div className="text-muted-foreground space-x-4">
+                        <div className="text-muted-foreground flex items-center gap-4">
+                            <span>@橘子Jun</span>
                             <a href="https://www.coolapk.com/u/765390" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                                @橘子Jun (酷安)
+                                酷安主页
                             </a>
                              <a href="https://linux.do/u/gengyj16" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                                @gengyj16 (Linux.do)
+                                Linux.do主页
                             </a>
                         </div>
                     </div>
