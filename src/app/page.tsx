@@ -19,7 +19,7 @@ export default function HomePage() {
   const [image, setImage] = useState<string | null>(null);
   const [depthMap, setDepthMap] = useState<string | null>(null);
   const [key, setKey] = useState(Date.now());
-  const [depthMultiplier, setDepthMultiplier] = useState(1);
+  const [depthMultiplier, setDepthMultiplier] = useState(0.7);
   const [cameraDistance, setCameraDistance] = useState(2);
   const [meshDetail, setMeshDetail] = useState(1024);
   const [blurIntensity, setBlurIntensity] = useState(1.0);
