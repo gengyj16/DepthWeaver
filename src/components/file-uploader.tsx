@@ -208,6 +208,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         if (!imageFile) return;
 
         setIsGenerating(true);
+        const errorHint = "请检查网络状况，以及是否达到API调用频率限制，切换网络可能解决。";
+
         try {
             const formData = new FormData();
             formData.append('files', imageFile);
@@ -271,11 +273,11 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                             toast({ title: "成功", description: "深度图已生成并载入。" });
                         } catch(e) {
                              if (e instanceof Error) {
-                                toast({ variant: "destructive", title: "错误", description: `下载生成的深度图时出错: ${e.message}` });
+                                toast({ variant: "destructive", title: "错误", description: `下载生成的深度图时出错: ${e.message}. ${errorHint}` });
                             }
                         }
                     } else {
-                        toast({ variant: "destructive", title: "错误", description: "API返回结果中未找到深度图URL。" });
+                        toast({ variant: "destructive", title: "错误", description: `API返回结果中未找到深度图URL。 ${errorHint}` });
                     }
                 } else if (data.msg === 'process_generating') {
                     // Optional: handle progress updates
@@ -285,13 +287,18 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             eventSource.onerror = (err) => {
                 console.error("EventSource failed:", err);
                 eventSource.close();
-                toast({ variant: "destructive", title: "错误", description: "获取结果时发生错误。" });
+                toast({ variant: "destructive", title: "错误", description: `获取结果时发生错误。 ${errorHint}` });
                 setIsGenerating(false);
             };
 
         } catch (error) {
             console.error("生成深度图时出错:", error);
-            toast({ variant: "destructive", title: "错误", description: `生成深度图时出错: ${error instanceof Error ? error.message : String(error)}` });
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            toast({ 
+                variant: "destructive", 
+                title: "错误", 
+                description: `生成深度图时出错: ${errorMessage}. ${errorHint}`
+            });
             setIsGenerating(false);
         }
     };
@@ -344,3 +351,5 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
