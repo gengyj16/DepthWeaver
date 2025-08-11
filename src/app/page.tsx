@@ -5,11 +5,14 @@ import { DepthWeaverScene } from '@/components/depth-weaver-scene';
 import { FileUploader } from '@/components/file-uploader';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Label } from '@/components/ui/label';
 
 export default function HomePage() {
   const [image, setImage] = useState<string | null>(null);
   const [depthMap, setDepthMap] = useState<string | null>(null);
   const [key, setKey] = useState(Date.now());
+  const [depthMultiplier, setDepthMultiplier] = useState(0.3);
 
   const handleFilesChange = (imageFile: File, depthMapFile: File) => {
     const imageUrl = URL.createObjectURL(imageFile);
@@ -47,7 +50,22 @@ export default function HomePage() {
       </header>
       
       {image && depthMap ? (
-        <DepthWeaverScene key={key} image={image} depthMap={depthMap} />
+        <>
+          <DepthWeaverScene key={key} image={image} depthMap={depthMap} depthMultiplier={depthMultiplier} />
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-72 p-4 bg-background/50 backdrop-blur-sm rounded-lg shadow-lg">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="depth-slider" className="text-center">Depth: {depthMultiplier.toFixed(2)}</Label>
+              <Slider 
+                id="depth-slider"
+                min={0}
+                max={1}
+                step={0.01}
+                value={[depthMultiplier]}
+                onValueChange={(value) => setDepthMultiplier(value[0])}
+              />
+            </div>
+          </div>
+        </>
       ) : (
         <div className="flex items-center justify-center h-full w-full px-4">
           <FileUploader onFilesSelected={handleFilesChange} />

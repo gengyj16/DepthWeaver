@@ -6,11 +6,20 @@ import * as THREE from 'three';
 interface DepthWeaverSceneProps {
   image: string;
   depthMap: string;
+  depthMultiplier: number;
 }
 
-export function DepthWeaverScene({ image, depthMap }: DepthWeaverSceneProps) {
+export function DepthWeaverScene({ image, depthMap, depthMultiplier }: DepthWeaverSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const materialRef = useRef<THREE.ShaderMaterial>();
+
+  useEffect(() => {
+    if (materialRef.current) {
+        materialRef.current.uniforms.uDepthMultiplier.value = depthMultiplier;
+    }
+  }, [depthMultiplier]);
+
 
   useEffect(() => {
     if (!mountRef.current || !image || !depthMap) return;
@@ -41,16 +50,18 @@ export function DepthWeaverScene({ image, depthMap }: DepthWeaverSceneProps) {
       uniforms: {
         uTexture: { value: colorTexture },
         uDepthMap: { value: depthTexture },
+        uDepthMultiplier: { value: depthMultiplier },
       },
       vertexShader: `
         uniform sampler2D uDepthMap;
+        uniform float uDepthMultiplier;
         varying vec2 vUv;
         
         void main() {
           vUv = uv;
           vec4 depthColor = texture2D(uDepthMap, uv);
           float depth = 1.0 - depthColor.r; // Invert depth map for correct displacement
-          float displacement = depth * 0.3;
+          float displacement = depth * uDepthMultiplier;
           vec3 newPosition = position + normal * displacement;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
         }
@@ -64,6 +75,7 @@ export function DepthWeaverScene({ image, depthMap }: DepthWeaverSceneProps) {
         }
       `,
     });
+    materialRef.current = material;
 
     const plane = new THREE.Mesh(geometry, material);
     scene.add(plane);
