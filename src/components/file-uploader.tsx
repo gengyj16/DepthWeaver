@@ -333,16 +333,16 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
 
     return (
         <Card className="w-full max-w-2xl bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl shadow-black/20">
-            <CardHeader>
-                <div className="flex justify-between items-center">
-                    <CardTitle className="text-3xl font-bold text-center">空间照片构建器</CardTitle>
+            <CardHeader className="text-center">
+                <div className="flex justify-end items-center -mb-8">
                     <Link href="/about" passHref>
                         <Button variant="ghost" size="icon">
                             <Info className="h-5 w-5" />
                         </Button>
                     </Link>
                 </div>
-                <CardDescription className="text-center pt-2">
+                <CardTitle className="text-3xl font-bold">空间照片构建器</CardTitle>
+                <CardDescription className="pt-2">
                     上传照片和深度图（Depth Map），为你创建身临其境的空间照片效果。
                 </CardDescription>
             </CardHeader>

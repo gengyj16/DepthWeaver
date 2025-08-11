@@ -25,11 +25,14 @@ export default function AboutPage() {
                 <CardContent className="space-y-6">
                     <div className="space-y-2">
                         <h3 className="font-semibold">作者</h3>
-                        <p className="text-muted-foreground">
+                        <div className="text-muted-foreground space-x-4">
                             <a href="https://www.coolapk.com/u/765390" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                                 @橘子Jun (酷安)
                             </a>
-                        </p>
+                             <a href="https://linux.do/u/gengyj16" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                @gengyj16 (Linux.do)
+                            </a>
+                        </div>
                     </div>
                     <div className="space-y-2">
                         <h3 className="font-semibold">设计灵感</h3>
@@ -41,6 +44,7 @@ export default function AboutPage() {
                         <h3 className="font-semibold">实现技术</h3>
                         <p className="text-muted-foreground">
                             通过强大的开源模型 <a href="https://github.com/LiheYoung/Depth-Anything" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Depth-Anything-V2</a> 生成深度图，并结合 <a href="https://threejs.org/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Three.js</a> 在网页上构建和渲染3D场景，从而实现了“低配版”空间照片效果。
+                            此外，这个项目本身是 <a href="https://studio.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Firebase Studio</a> 构建的。
                         </p>
                     </div>
                 </CardContent>
