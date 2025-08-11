@@ -43,6 +43,8 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
                 URL.revokeObjectURL(url);
                 setPreviewUrl(null);
             };
+        } else {
+            setPreviewUrl(null);
         }
     }, [acceptedFile]);
 
@@ -190,7 +192,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const [isGenerating, setIsGenerating] = useState(false);
     const { toast } = useToast();
     const defaultApiUrl = 'https://depth-anything-depth-anything-v2.hf.space';
-    const [apiUrl, setApiUrl] = useState('');
+    const [apiUrl, setApiUrl] = useState(defaultApiUrl);
 
     const handleSubmit = () => {
         if (imageFile && depthMapFile) {
@@ -232,8 +234,10 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             const formData = new FormData();
             formData.append('files', blob, imageFile.name);
             
+            const effectiveApiUrl = currentApiUrl || defaultApiUrl;
+
             // 首先上传文件
-            const uploadResponse = await fetch(`${currentApiUrl}/upload`, {
+            const uploadResponse = await fetch(`${effectiveApiUrl}/upload`, {
                 method: 'POST',
                 body: formData
             });
@@ -250,7 +254,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             };
 
             // Step 1: Initiate the process and get event_id
-            const postResponse = await fetch(`${currentApiUrl}/call/on_submit`, {
+            const postResponse = await fetch(`${effectiveApiUrl}/call/on_submit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestData)
@@ -268,7 +272,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             }
 
             // Step 2: Poll the event stream for the result
-            const eventSource = new EventSource(`${currentApiUrl}/call/on_submit/${eventId}`);
+            const eventSource = new EventSource(`${effectiveApiUrl}/call/on_submit/${eventId}`);
             
             eventSource.addEventListener('complete', async (event: MessageEvent) => {
                 const dataStr = event.data.replace(/^data: /, '');
@@ -280,7 +284,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                     const image2 = message[1];
                     if(image2 && image2.url){
                         const resultUrlPath = image2.url.replace('/cal', '');
-                        const fullResultUrl = `${currentApiUrl}/file=${resultUrlPath}`;
+                        const fullResultUrl = `${effectiveApiUrl}/file=${resultUrlPath}`;
                         
                         try {
                             const imageResponse = await fetch(fullResultUrl);
@@ -364,6 +368,3 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
-
-    
-    
