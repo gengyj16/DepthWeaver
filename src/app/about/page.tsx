@@ -27,11 +27,11 @@ export default function AboutPage() {
                         <h3 className="font-semibold">作者</h3>
                         <div className="text-muted-foreground flex items-center gap-4">
                             <span>@橘子Jun</span>
-                            <a href="https://www.coolapk.com/u/765390" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                                酷安主页
+                            <a href="https://www.coolapk.com/feed/66615199?s=NjY3ODU2NDdiYWRjZWc2ODk5ZmE2ZXoa1550" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                酷安图文
                             </a>
-                             <a href="https://linux.do/u/gengyj16" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                                Linux.do主页
+                             <a href="https://linux.do/t/topic/859525" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                Linux.do帖子
                             </a>
                         </div>
                     </div>
