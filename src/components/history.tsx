@@ -41,7 +41,7 @@ export function HistoryList({ history, onLoad, onDelete }: HistoryListProps) {
       <h2 className="text-2xl font-bold text-center mb-6">历史记录</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {history.map((entry) => (
-          <Card key={entry.id} className="group relative">
+          <Card key={entry.id} className="group relative overflow-hidden">
             <CardContent className="p-0">
               <div
                 className="aspect-square w-full relative cursor-pointer"
@@ -51,9 +51,9 @@ export function HistoryList({ history, onLoad, onDelete }: HistoryListProps) {
                   src={entry.image}
                   alt="History thumbnail"
                   fill
-                  className="object-cover transition-transform duration-300 group-hover:scale-105 rounded-t-lg"
+                  className="object-cover rounded-lg transition-transform duration-300 group-hover:scale-105"
                 />
-                <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 rounded-lg">
                   <ImageIcon className="h-12 w-12 text-white" />
                 </div>
               </div>
