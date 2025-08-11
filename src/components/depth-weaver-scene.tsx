@@ -13,14 +13,28 @@ interface DepthWeaverSceneProps {
   blurIntensity: number;
   viewAngleLimit: number;
   useSensor: boolean;
+  backgroundMode: 'blur' | 'solid';
+  backgroundColor: string;
 }
 
-export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDistance, meshDetail, blurIntensity, viewAngleLimit, useSensor }: DepthWeaverSceneProps) {
+export function DepthWeaverScene({ 
+  image, 
+  depthMap, 
+  depthMultiplier, 
+  cameraDistance, 
+  meshDetail, 
+  blurIntensity, 
+  viewAngleLimit, 
+  useSensor,
+  backgroundMode,
+  backgroundColor
+}: DepthWeaverSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const materialRef = useRef<THREE.ShaderMaterial>();
   const cameraRef = useRef<THREE.PerspectiveCamera>();
   const meshRef = useRef<THREE.Mesh>();
+  const sceneRef = useRef<THREE.Scene>();
   const keyRef = useRef(meshDetail);
   const maxAngleRef = useRef(THREE.MathUtils.degToRad(viewAngleLimit));
   
@@ -50,6 +64,16 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
   useEffect(() => {
     maxAngleRef.current = THREE.MathUtils.degToRad(viewAngleLimit);
   }, [viewAngleLimit]);
+
+  useEffect(() => {
+      if (sceneRef.current) {
+          if (backgroundMode === 'solid') {
+              sceneRef.current.background = new THREE.Color(backgroundColor);
+          } else {
+              sceneRef.current.background = null;
+          }
+      }
+  }, [backgroundMode, backgroundColor]);
 
   const onPointerMove = (event: PointerEvent) => {
       if (!isDraggingRef.current || !meshRef.current || useSensor) return;
@@ -137,6 +161,11 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
     const currentMount = mountRef.current;
 
     const scene = new THREE.Scene();
+    sceneRef.current = scene;
+    if (backgroundMode === 'solid') {
+      scene.background = new THREE.Color(backgroundColor);
+    }
+
     const camera = new THREE.PerspectiveCamera(75, currentMount.clientWidth / currentMount.clientHeight, 0.1, 100);
     camera.position.z = cameraDistance;
     cameraRef.current = camera;
@@ -301,7 +330,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
       colorTexture.dispose();
       depthTexture.dispose();
     };
-  }, [image, depthMap, meshDetail]);
+  }, [image, depthMap, meshDetail, backgroundMode, backgroundColor]);
 
   return (
     <>
@@ -312,6 +341,16 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
             <p className="mt-4 text-lg font-semibold">正在构建3D场景...</p>
           </div>
         </div>
+      )}
+      {backgroundMode === 'blur' && image && (
+        <div 
+          className="absolute inset-0 w-full h-full z-[-1] bg-cover bg-center"
+          style={{ 
+            backgroundImage: `url(${image})`,
+            filter: 'blur(20px)',
+            transform: 'scale(1.1)'
+          }}
+        />
       )}
       <div 
         ref={mountRef} 

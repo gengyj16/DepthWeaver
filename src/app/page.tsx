@@ -15,6 +15,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { HistoryList, type HistoryEntry } from '@/components/history';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Input } from '@/components/ui/input';
 
 export default function HomePage() {
   const [image, setImage] = useState<string | null>(null);
@@ -29,6 +31,9 @@ export default function HomePage() {
   const [useSensor, setUseSensor] = useState(false);
   const [sensorSupported, setSensorSupported] = useState(true);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [backgroundMode, setBackgroundMode] = useState<'blur' | 'solid'>('blur');
+  const [backgroundColor, setBackgroundColor] = useState('#000000');
+
 
   useEffect(() => {
     if (typeof window.DeviceOrientationEvent === 'undefined') {
@@ -121,6 +126,8 @@ export default function HomePage() {
               blurIntensity={blurIntensity} 
               viewAngleLimit={viewAngleLimit}
               useSensor={useSensor}
+              backgroundMode={backgroundMode}
+              backgroundColor={backgroundColor}
             />
              <div className="absolute bottom-6 right-6 z-20">
               <Collapsible
@@ -158,6 +165,37 @@ export default function HomePage() {
                           />
                         </div>
                         {!sensorSupported && <p className="text-xs text-center text-destructive">您的设备不支持方向传感器。</p>}
+
+                        <div className="flex flex-col gap-2">
+                          <Label className="text-center">背景</Label>
+                           <RadioGroup value={backgroundMode} onValueChange={(value: 'blur' | 'solid') => setBackgroundMode(value)} className="grid grid-cols-2 gap-2">
+                              <div>
+                                <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" />
+                                <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                  模糊背景
+                                </Label>
+                              </div>
+                              <div>
+                                <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" />
+                                <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                  纯色
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                        </div>
+
+                        {backgroundMode === 'solid' && (
+                          <div className="flex items-center gap-4 rounded-lg border p-3 shadow-sm bg-background/30">
+                            <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
+                            <Input 
+                              id="bg-color-picker"
+                              type="color" 
+                              value={backgroundColor} 
+                              onChange={(e) => setBackgroundColor(e.target.value)}
+                              className="w-24 h-8 p-1"
+                            />
+                          </div>
+                        )}
 
                         <div className="flex flex-col gap-2">
                           <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
