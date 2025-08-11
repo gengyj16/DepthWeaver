@@ -263,7 +263,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 if (outputData && Array.isArray(outputData) && outputData.length > 1) {
                     const image2 = outputData[1];
                     if(image2 && image2.url){
-                        const resultUrl = image2.url;
+                        const resultUrl = image2.url.replace('/cal', '');
                         try {
                             const imageResponse = await fetch(resultUrl);
                             if (!imageResponse.ok) {
@@ -356,5 +356,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
 
     
