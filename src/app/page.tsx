@@ -14,6 +14,7 @@ export default function HomePage() {
   const [key, setKey] = useState(Date.now());
   const [depthMultiplier, setDepthMultiplier] = useState(0.3);
   const [cameraDistance, setCameraDistance] = useState(1);
+  const [meshDetail, setMeshDetail] = useState(1024);
 
   const handleFilesChange = (imageFile: File, depthMapFile: File) => {
     const imageUrl = URL.createObjectURL(imageFile);
@@ -52,8 +53,8 @@ export default function HomePage() {
       
       {image && depthMap ? (
         <>
-          <DepthWeaverScene key={key} image={image} depthMap={depthMap} depthMultiplier={depthMultiplier} cameraDistance={cameraDistance} />
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-72 p-4 bg-background/50 backdrop-blur-sm rounded-lg shadow-lg">
+          <DepthWeaverScene key={key} image={image} depthMap={depthMap} depthMultiplier={depthMultiplier} cameraDistance={cameraDistance} meshDetail={meshDetail} />
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-80 p-4 bg-background/50 backdrop-blur-sm rounded-lg shadow-lg">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
@@ -75,6 +76,17 @@ export default function HomePage() {
                   step={0.01}
                   value={[cameraDistance]}
                   onValueChange={(value) => setCameraDistance(value[0])}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="mesh-detail-slider" className="text-center">网格细节: {meshDetail}</Label>
+                <Slider
+                  id="mesh-detail-slider"
+                  min={256}
+                  max={2048}
+                  step={256}
+                  value={[meshDetail]}
+                  onValueChange={(value) => setMeshDetail(value[0])}
                 />
               </div>
             </div>

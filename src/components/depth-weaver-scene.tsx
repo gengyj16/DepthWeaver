@@ -8,13 +8,16 @@ interface DepthWeaverSceneProps {
   depthMap: string;
   depthMultiplier: number;
   cameraDistance: number;
+  meshDetail: number;
 }
 
-export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDistance }: DepthWeaverSceneProps) {
+export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDistance, meshDetail }: DepthWeaverSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const materialRef = useRef<THREE.ShaderMaterial>();
   const cameraRef = useRef<THREE.PerspectiveCamera>();
+  const meshRef = useRef<THREE.Mesh>();
+  const keyRef = useRef(meshDetail);
 
   useEffect(() => {
     if (materialRef.current) {
@@ -27,7 +30,6 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
         cameraRef.current.position.z = cameraDistance;
     }
   }, [cameraDistance]);
-
 
   useEffect(() => {
     if (!mountRef.current || !image || !depthMap) return;
@@ -53,41 +55,61 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
     const depthTexture = textureLoader.load(depthMap);
     
     colorTexture.colorSpace = THREE.SRGBColorSpace;
+    
+    // Create geometry and material
+    if (!meshRef.current || keyRef.current !== meshDetail) {
+      if (meshRef.current) {
+        scene.remove(meshRef.current);
+        meshRef.current.geometry.dispose();
+      }
 
-    const geometry = new THREE.PlaneGeometry(2, 2, 1024, 1024);
-    const material = new THREE.ShaderMaterial({
-      uniforms: {
-        uTexture: { value: colorTexture },
-        uDepthMap: { value: depthTexture },
-        uDepthMultiplier: { value: depthMultiplier },
-      },
-      vertexShader: `
-        uniform sampler2D uDepthMap;
-        uniform float uDepthMultiplier;
-        varying vec2 vUv;
-        
-        void main() {
-          vUv = uv;
-          vec4 depthColor = texture2D(uDepthMap, uv);
-          float depth = depthColor.r;
-          float displacement = depth * uDepthMultiplier;
-          vec3 newPosition = position + normal * displacement;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D uTexture;
-        varying vec2 vUv;
-        
-        void main() {
-          gl_FragColor = texture2D(uTexture, vUv);
-        }
-      `,
-    });
-    materialRef.current = material;
+      const geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
+      const material = materialRef.current || new THREE.ShaderMaterial({
+        uniforms: {
+          uTexture: { value: colorTexture },
+          uDepthMap: { value: depthTexture },
+          uDepthMultiplier: { value: depthMultiplier },
+        },
+        vertexShader: `
+          uniform sampler2D uDepthMap;
+          uniform float uDepthMultiplier;
+          varying vec2 vUv;
+          
+          void main() {
+            vUv = uv;
+            vec4 depthColor = texture2D(uDepthMap, uv);
+            float depth = depthColor.r;
+            float displacement = depth * uDepthMultiplier;
+            vec3 newPosition = position + normal * displacement;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D uTexture;
+          varying vec2 vUv;
+          
+          void main() {
+            gl_FragColor = texture2D(uTexture, vUv);
+          }
+        `,
+      });
+      materialRef.current = material;
+      
+      const plane = new THREE.Mesh(geometry, material);
+      scene.add(plane);
+      meshRef.current = plane;
+      keyRef.current = meshDetail;
+    } else {
+        scene.add(meshRef.current);
+    }
+    
+    // Update textures
+    if (materialRef.current) {
+        materialRef.current.uniforms.uTexture.value = colorTexture;
+        materialRef.current.uniforms.uDepthMap.value = depthTexture;
+        materialRef.current.needsUpdate = true;
+    }
 
-    const plane = new THREE.Mesh(geometry, material);
-    scene.add(plane);
 
     let isDragging = false;
     const previousPointerPosition = { x: 0, y: 0 };
@@ -101,12 +123,12 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
     };
 
     const onPointerMove = (event: PointerEvent) => {
-        if (!isDragging) return;
+        if (!isDragging || !meshRef.current) return;
         const deltaX = event.clientX - previousPointerPosition.x;
         const deltaY = event.clientY - previousPointerPosition.y;
 
-        plane.rotation.y = THREE.MathUtils.clamp(plane.rotation.y + deltaX * 0.005, -maxAngle, maxAngle);
-        plane.rotation.x = THREE.MathUtils.clamp(plane.rotation.x + deltaY * 0.005, -maxAngle, maxAngle);
+        meshRef.current.rotation.y = THREE.MathUtils.clamp(meshRef.current.rotation.y + deltaX * 0.005, -maxAngle, maxAngle);
+        meshRef.current.rotation.x = THREE.MathUtils.clamp(meshRef.current.rotation.x + deltaY * 0.005, -maxAngle, maxAngle);
 
         previousPointerPosition.x = event.clientX;
         previousPointerPosition.y = event.clientY;
@@ -141,16 +163,19 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
       currentMount.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      
+      if (meshRef.current) {
+        scene.remove(meshRef.current);
+      }
+      
       if (currentMount && renderer.domElement) {
          currentMount.removeChild(renderer.domElement);
       }
       renderer.dispose();
-      geometry.dispose();
-      material.dispose();
       colorTexture.dispose();
       depthTexture.dispose();
     };
-  }, [image, depthMap]);
+  }, [image, depthMap, meshDetail]);
 
   return (
     <>
