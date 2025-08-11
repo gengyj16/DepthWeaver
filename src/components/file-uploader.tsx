@@ -15,10 +15,11 @@ interface FileInputBoxProps {
     onFileSelect: (file: File) => void;
     acceptedFile: File | null;
     label: string;
+    description: string;
     icon: ReactNode;
 }
 
-const FileInputBox = ({ id, onFileSelect, acceptedFile, label, icon }: FileInputBoxProps) => {
+const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon }: FileInputBoxProps) => {
     const [isDragging, setIsDragging] = useState(false);
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -50,7 +51,10 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, icon }: FileInput
 
     return (
         <div className="space-y-2">
-            <label htmlFor={id} className="block text-sm font-medium text-foreground">{label}</label>
+            <div className='flex items-baseline justify-between'>
+                <label htmlFor={id} className="block text-sm font-medium text-foreground">{label}</label>
+                <p className='text-xs text-muted-foreground'>{description}</p>
+            </div>
             <label
                 htmlFor={id}
                 className={cn(
@@ -108,6 +112,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         onFileSelect={setImageFile} 
                         acceptedFile={imageFile} 
                         label="Color Image" 
+                        description=""
                         icon={<FileImage className="w-10 h-10 mb-3 text-muted-foreground" />}
                     />
                     <FileInputBox 
@@ -115,6 +120,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         onFileSelect={setDepthMapFile} 
                         acceptedFile={depthMapFile} 
                         label="Depth Map (Grayscale)" 
+                        description="白色靠近，黑色远离"
                         icon={<UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />}
                     />
                 </div>
