@@ -10,15 +10,17 @@ interface DepthWeaverSceneProps {
   cameraDistance: number;
   meshDetail: number;
   blurIntensity: number;
+  viewAngleLimit: number;
 }
 
-export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDistance, meshDetail, blurIntensity }: DepthWeaverSceneProps) {
+export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDistance, meshDetail, blurIntensity, viewAngleLimit }: DepthWeaverSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const materialRef = useRef<THREE.ShaderMaterial>();
   const cameraRef = useRef<THREE.PerspectiveCamera>();
   const meshRef = useRef<THREE.Mesh>();
   const keyRef = useRef(meshDetail);
+  const maxAngleRef = useRef(THREE.MathUtils.degToRad(viewAngleLimit));
 
   useEffect(() => {
     if (materialRef.current) {
@@ -37,6 +39,10 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
         materialRef.current.uniforms.uBlurIntensity.value = blurIntensity;
     }
   }, [blurIntensity]);
+
+  useEffect(() => {
+    maxAngleRef.current = THREE.MathUtils.degToRad(viewAngleLimit);
+  }, [viewAngleLimit]);
 
 
   useEffect(() => {
@@ -164,7 +170,6 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
 
     let isDragging = false;
     const previousPointerPosition = { x: 0, y: 0 };
-    const maxAngle = 0.26; // Approx 15 degrees
 
     const onPointerDown = (event: PointerEvent) => {
         isDragging = true;
@@ -178,6 +183,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
         const deltaX = event.clientX - previousPointerPosition.x;
         const deltaY = event.clientY - previousPointerPosition.y;
 
+        const maxAngle = maxAngleRef.current;
         meshRef.current.rotation.y = THREE.MathUtils.clamp(meshRef.current.rotation.y + deltaX * 0.005, -maxAngle, maxAngle);
         meshRef.current.rotation.x = THREE.MathUtils.clamp(meshRef.current.rotation.x + deltaY * 0.005, -maxAngle, maxAngle);
 

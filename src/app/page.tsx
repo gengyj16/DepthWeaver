@@ -16,6 +16,7 @@ export default function HomePage() {
   const [cameraDistance, setCameraDistance] = useState(1);
   const [meshDetail, setMeshDetail] = useState(1024);
   const [blurIntensity, setBlurIntensity] = useState(1.0);
+  const [viewAngleLimit, setViewAngleLimit] = useState(15);
 
   const handleFilesChange = (imageFile: File, depthMapFile: File) => {
     const imageUrl = URL.createObjectURL(imageFile);
@@ -54,7 +55,7 @@ export default function HomePage() {
       
       {image && depthMap ? (
         <>
-          <DepthWeaverScene key={key} image={image} depthMap={depthMap} depthMultiplier={depthMultiplier} cameraDistance={cameraDistance} meshDetail={meshDetail} blurIntensity={blurIntensity} />
+          <DepthWeaverScene key={key} image={image} depthMap={depthMap} depthMultiplier={depthMultiplier} cameraDistance={cameraDistance} meshDetail={meshDetail} blurIntensity={blurIntensity} viewAngleLimit={viewAngleLimit} />
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-80 p-4 bg-background/50 backdrop-blur-sm rounded-lg shadow-lg">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
@@ -99,6 +100,17 @@ export default function HomePage() {
                   step={0.1}
                   value={[blurIntensity]}
                   onValueChange={(value) => setBlurIntensity(value[0])}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="angle-limit-slider" className="text-center">视角限制: {viewAngleLimit}°</Label>
+                <Slider
+                  id="angle-limit-slider"
+                  min={0}
+                  max={45}
+                  step={1}
+                  value={[viewAngleLimit]}
+                  onValueChange={(value) => setViewAngleLimit(value[0])}
                 />
               </div>
             </div>
