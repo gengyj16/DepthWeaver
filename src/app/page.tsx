@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -19,10 +20,10 @@ export default function HomePage() {
   const [depthMap, setDepthMap] = useState<string | null>(null);
   const [key, setKey] = useState(Date.now());
   const [depthMultiplier, setDepthMultiplier] = useState(1);
-  const [cameraDistance, setCameraDistance] = useState(1);
+  const [cameraDistance, setCameraDistance] = useState(2);
   const [meshDetail, setMeshDetail] = useState(1024);
   const [blurIntensity, setBlurIntensity] = useState(1.0);
-  const [viewAngleLimit, setViewAngleLimit] = useState(15);
+  const [viewAngleLimit, setViewAngleLimit] = useState(10);
   const [isControlsOpen, setIsControlsOpen] = useState(true);
   const [useSensor, setUseSensor] = useState(false);
   const [sensorSupported, setSensorSupported] = useState(true);
@@ -138,6 +139,7 @@ export default function HomePage() {
                       min={256}
                       max={2048}
                       step={256}
+      
                       value={[meshDetail]}
                       onValueChange={(value) => setMeshDetail(value[0])}
                     />
