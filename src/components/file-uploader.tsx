@@ -1,11 +1,11 @@
 
 "use client";
 
-import { useState, ChangeEvent, DragEvent, ReactNode } from 'react';
+import { useState, ChangeEvent, DragEvent, ReactNode, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { UploadCloud, FileImage, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { UploadCloud, FileImage, CheckCircle2, Loader2, Sparkles, Download } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast"
 
 interface FileUploaderProps {
@@ -26,6 +26,19 @@ interface FileInputBoxProps {
 
 const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon, showGenerateButton, onGenerateClick, isGenerating }: FileInputBoxProps) => {
     const [isDragging, setIsDragging] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (acceptedFile) {
+            const url = URL.createObjectURL(acceptedFile);
+            setPreviewUrl(url);
+
+            return () => {
+                URL.revokeObjectURL(url);
+                setPreviewUrl(null);
+            };
+        }
+    }, [acceptedFile]);
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
@@ -79,7 +92,7 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
             <label
                 htmlFor={id}
                 className={cn(
-                    "relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-muted/50 border-border transition-colors",
+                    "relative group flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-muted/50 border-border transition-colors overflow-hidden",
                     isDragging && "border-primary bg-primary/10"
                 )}
                 onDragEnter={handleDragEnter}
@@ -87,21 +100,29 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
                 onDragOver={handleDragEnter}
                 onDrop={handleDrop}
             >
-                <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
-                    {acceptedFile ? (
-                        <>
-                            <CheckCircle2 className="w-10 h-10 mb-3 text-primary" />
-                            <p className="mb-2 text-sm font-semibold max-w-full truncate px-2">{acceptedFile.name}</p>
-                            <p className="text-xs text-muted-foreground">点击或拖动来更换</p>
-                        </>
-                    ) : (
-                        <>
-                            {icon}
-                            <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold text-primary">点击上传</span> 或拖放文件</p>
-                            <p className="text-xs text-muted-foreground">支持 PNG, JPG, 或 WEBP</p>
-                        </>
-                    )}
-                </div>
+                 {acceptedFile && previewUrl ? (
+                    <>
+                        <img src={previewUrl} alt="Preview" className="h-full w-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <p className="text-sm text-white font-semibold max-w-full truncate px-2">{acceptedFile.name}</p>
+                            <p className="text-xs text-gray-300">点击或拖动来更换</p>
+                        </div>
+                        <a
+                            href={previewUrl}
+                            download={acceptedFile.name}
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors"
+                        >
+                            <Download className="w-4 h-4" />
+                        </a>
+                    </>
+                ) : (
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
+                        {icon}
+                        <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold text-primary">点击上传</span> 或拖放文件</p>
+                        <p className="text-xs text-muted-foreground">支持 PNG, JPG, 或 WEBP</p>
+                    </div>
+                )}
                 <input id={id} type="file" className="hidden" onChange={handleFileChange} accept="image/png, image/jpeg, image/webp" />
             </label>
         </div>
