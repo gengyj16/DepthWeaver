@@ -39,7 +39,7 @@ export function HistoryList({ history, onLoad, onDelete }: HistoryListProps) {
   return (
     <div className="py-8 px-4 md:px-8">
       <h2 className="text-2xl font-bold text-center mb-6">历史记录</h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {history.map((entry) => (
           <Card key={entry.id} className="group relative overflow-hidden">
             <CardContent className="p-0">
@@ -51,7 +51,7 @@ export function HistoryList({ history, onLoad, onDelete }: HistoryListProps) {
                   src={entry.image}
                   alt="History thumbnail"
                   fill
-                  sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                  sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
