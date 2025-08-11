@@ -25,9 +25,9 @@ interface FileInputBoxProps {
     showGenerateButton?: boolean;
     onGenerateClick?: (apiUrl: string) => void;
     isGenerating?: boolean;
-    apiUrl: string;
-    setApiUrl: (url: string) => void;
-    defaultApiUrl: string;
+    apiUrl?: string;
+    setApiUrl?: (url: string) => void;
+    defaultApiUrl?: string;
 }
 
 const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon, showGenerateButton, onGenerateClick, isGenerating, apiUrl, setApiUrl, defaultApiUrl }: FileInputBoxProps) => {
@@ -80,71 +80,73 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
             <div className='flex items-center justify-between min-h-[32px]'>
                 <div className="flex items-center gap-2">
                     <label htmlFor={id} className="block text-sm font-medium text-foreground">{label}</label>
-                    <p className="text-xs text-muted-foreground">{description}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    {showGenerateButton && (
-                        <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => onGenerateClick?.(apiUrl || defaultApiUrl)} 
-                            disabled={!acceptedFile || isGenerating}
-                            className="text-xs"
-                        >
-                            {isGenerating ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <Sparkles className="mr-2 h-4 w-4" />
-                            )}
-                            生成深度图
-                        </Button>
+                    {description && !showGenerateButton && (
+                         <p className="text-xs text-muted-foreground">{description}</p>
                     )}
-                     {showGenerateButton && (
-                         <Dialog>
-                            <DialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-6 w-6">
-                                    <HelpCircle className="h-4 w-4" />
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>关于“生成深度图”</DialogTitle>
-                                    <DialogDescription asChild>
-                                       <div>
-                                            此功能将照片发送到以下API地址进行处理，这是一个开源模型，你也可以查阅
-                                            <a 
-                                                href="https://huggingface.co/spaces/depth-anything/Depth-Anything-V2" 
-                                                target="_blank" 
-                                                rel="noopener noreferrer" 
-                                                className="text-primary underline hover:text-primary/80"
-                                            >
-                                                官方文档
-                                            </a>
-                                            本地部署。
-                                       </div>
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                    <div className="space-y-2">
-                                        <div className="flex items-baseline gap-2">
-                                            <Label htmlFor="api-url" className="font-bold">
-                                                高级设置:
-                                            </Label>
-                                             <Label htmlFor="api-url" className="text-sm">
-                                                API 地址
-                                            </Label>
+                    {showGenerateButton && onGenerateClick && apiUrl !== undefined && setApiUrl && defaultApiUrl && (
+                        <>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => onGenerateClick(apiUrl || defaultApiUrl)} 
+                                disabled={!acceptedFile || isGenerating}
+                                className="text-xs"
+                            >
+                                {isGenerating ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Sparkles className="mr-2 h-4 w-4" />
+                                )}
+                                生成深度图
+                            </Button>
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                                        <HelpCircle className="h-4 w-4" />
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>关于“生成深度图”</DialogTitle>
+                                        <DialogDescription asChild>
+                                           <div>
+                                                此功能将照片发送到以下API地址进行处理，这是一个开源模型，你也可以查阅
+                                                <a 
+                                                    href="https://huggingface.co/spaces/depth-anything/Depth-Anything-V2" 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer" 
+                                                    className="text-primary underline hover:text-primary/80"
+                                                >
+                                                    官方文档
+                                                </a>
+                                                本地部署。
+                                           </div>
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="grid gap-4 py-4">
+                                        <div className="space-y-2">
+                                            <div className="flex items-baseline gap-2">
+                                                <Label htmlFor="api-url" className="font-bold">
+                                                    高级设置:
+                                                </Label>
+                                                 <Label htmlFor="api-url" className="text-sm">
+                                                    API 地址
+                                                </Label>
+                                            </div>
+                                            <Input
+                                                id="api-url"
+                                                value={apiUrl}
+                                                onChange={(e) => setApiUrl(e.target.value)}
+                                                placeholder={defaultApiUrl}
+                                            />
                                         </div>
-                                        <Input
-                                            id="api-url"
-                                            value={apiUrl}
-                                            onChange={(e) => setApiUrl(e.target.value)}
-                                            placeholder={defaultApiUrl}
-                                        />
                                     </div>
-                                </div>
-                            </DialogContent>
-                        </Dialog>
-                     )}
+                                </DialogContent>
+                            </Dialog>
+                        </>
+                    )}
                 </div>
             </div>
             <label
@@ -357,9 +359,6 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         label="深度图 (灰度)" 
                         description="白色靠近，黑色远离"
                         icon={<UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />}
-                        apiUrl={apiUrl}
-                        setApiUrl={setApiUrl}
-                        defaultApiUrl={defaultApiUrl}
                     />
                 </div>
                 <Button onClick={handleSubmit} disabled={!imageFile || !depthMapFile} size="lg" className="w-full text-lg py-6">
