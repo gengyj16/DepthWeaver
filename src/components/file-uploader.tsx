@@ -27,9 +27,10 @@ interface FileInputBoxProps {
     isGenerating?: boolean;
     apiUrl: string;
     setApiUrl: (url: string) => void;
+    defaultApiUrl: string;
 }
 
-const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon, showGenerateButton, onGenerateClick, isGenerating, apiUrl, setApiUrl }: FileInputBoxProps) => {
+const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon, showGenerateButton, onGenerateClick, isGenerating, apiUrl, setApiUrl, defaultApiUrl }: FileInputBoxProps) => {
     const [isDragging, setIsDragging] = useState(false);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -84,7 +85,7 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
                         <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => onGenerateClick?.(apiUrl)} 
+                            onClick={() => onGenerateClick?.(apiUrl || defaultApiUrl)} 
                             disabled={!acceptedFile || isGenerating}
                             className="text-xs"
                         >
@@ -106,10 +107,19 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
                             <DialogContent>
                                 <DialogHeader>
                                     <DialogTitle>关于“生成深度图”</DialogTitle>
-                                    <DialogDescription>
-                                        此功能将照片发送到 API 
-                                        <code className="mx-1 font-mono bg-muted text-foreground p-1 rounded-sm">{apiUrl}</code> 
-                                        进行处理，这是一个开源模型，你也可以查阅官方文档本地部署。
+                                    <DialogDescription asChild>
+                                       <div>
+                                            此功能将照片发送到以下API地址进行处理，这是一个开源模型，你也可以查阅
+                                            <a 
+                                                href="https://huggingface.co/spaces/depth-anything/Depth-Anything-V2" 
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className="text-primary underline hover:text-primary/80"
+                                            >
+                                                官方文档
+                                            </a>
+                                            本地部署。
+                                       </div>
                                     </DialogDescription>
                                 </DialogHeader>
                                 <div className="grid gap-4 py-4">
@@ -124,6 +134,7 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
                                             id="api-url"
                                             value={apiUrl}
                                             onChange={(e) => setApiUrl(e.target.value)}
+                                            placeholder={defaultApiUrl}
                                             className="col-span-3"
                                         />
                                     </div>
@@ -178,7 +189,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const [depthMapFile, setDepthMapFile] = useState<File | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const { toast } = useToast();
-    const [apiUrl, setApiUrl] = useState('https://depth-anything-depth-anything-v2.hf.space');
+    const defaultApiUrl = 'https://depth-anything-depth-anything-v2.hf.space';
+    const [apiUrl, setApiUrl] = useState('');
 
     const handleSubmit = () => {
         if (imageFile && depthMapFile) {
@@ -331,6 +343,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         isGenerating={isGenerating}
                         apiUrl={apiUrl}
                         setApiUrl={setApiUrl}
+                        defaultApiUrl={defaultApiUrl}
                     />
                     <FileInputBox 
                         id="depth-map-upload" 
@@ -341,6 +354,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         icon={<UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />}
                         apiUrl={apiUrl}
                         setApiUrl={setApiUrl}
+                        defaultApiUrl={defaultApiUrl}
                     />
                 </div>
                 <Button onClick={handleSubmit} disabled={!imageFile || !depthMapFile} size="lg" className="w-full text-lg py-6">
