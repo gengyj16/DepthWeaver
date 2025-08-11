@@ -13,6 +13,7 @@ export default function HomePage() {
   const [depthMap, setDepthMap] = useState<string | null>(null);
   const [key, setKey] = useState(Date.now());
   const [depthMultiplier, setDepthMultiplier] = useState(0.3);
+  const [cameraDistance, setCameraDistance] = useState(1);
 
   const handleFilesChange = (imageFile: File, depthMapFile: File) => {
     const imageUrl = URL.createObjectURL(imageFile);
@@ -51,18 +52,31 @@ export default function HomePage() {
       
       {image && depthMap ? (
         <>
-          <DepthWeaverScene key={key} image={image} depthMap={depthMap} depthMultiplier={depthMultiplier} />
+          <DepthWeaverScene key={key} image={image} depthMap={depthMap} depthMultiplier={depthMultiplier} cameraDistance={cameraDistance} />
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-72 p-4 bg-background/50 backdrop-blur-sm rounded-lg shadow-lg">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="depth-slider" className="text-center">Depth: {depthMultiplier.toFixed(2)}</Label>
-              <Slider 
-                id="depth-slider"
-                min={0}
-                max={1}
-                step={0.01}
-                value={[depthMultiplier]}
-                onValueChange={(value) => setDepthMultiplier(value[0])}
-              />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="depth-slider" className="text-center">Depth: {depthMultiplier.toFixed(2)}</Label>
+                <Slider 
+                  id="depth-slider"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={[depthMultiplier]}
+                  onValueChange={(value) => setDepthMultiplier(value[0])}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="zoom-slider" className="text-center">Zoom: {cameraDistance.toFixed(2)}</Label>
+                <Slider
+                  id="zoom-slider"
+                  min={0.5}
+                  max={2.5}
+                  step={0.01}
+                  value={[cameraDistance]}
+                  onValueChange={(value) => setCameraDistance(value[0])}
+                />
+              </div>
             </div>
           </div>
         </>

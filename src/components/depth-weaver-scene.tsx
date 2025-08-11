@@ -7,18 +7,26 @@ interface DepthWeaverSceneProps {
   image: string;
   depthMap: string;
   depthMultiplier: number;
+  cameraDistance: number;
 }
 
-export function DepthWeaverScene({ image, depthMap, depthMultiplier }: DepthWeaverSceneProps) {
+export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDistance }: DepthWeaverSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const materialRef = useRef<THREE.ShaderMaterial>();
+  const cameraRef = useRef<THREE.PerspectiveCamera>();
 
   useEffect(() => {
     if (materialRef.current) {
         materialRef.current.uniforms.uDepthMultiplier.value = depthMultiplier;
     }
   }, [depthMultiplier]);
+  
+  useEffect(() => {
+    if (cameraRef.current) {
+        cameraRef.current.position.z = cameraDistance;
+    }
+  }, [cameraDistance]);
 
 
   useEffect(() => {
@@ -29,7 +37,8 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier }: DepthWeav
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, currentMount.clientWidth / currentMount.clientHeight, 0.1, 100);
-    camera.position.z = 1;
+    camera.position.z = cameraDistance;
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
@@ -60,7 +69,7 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier }: DepthWeav
         void main() {
           vUv = uv;
           vec4 depthColor = texture2D(uDepthMap, uv);
-          float depth = depthColor.r;
+          float depth = 1.0 - depthColor.r;
           float displacement = depth * uDepthMultiplier;
           vec3 newPosition = position + normal * displacement;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
