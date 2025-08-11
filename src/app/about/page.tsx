@@ -45,7 +45,7 @@ export default function AboutPage() {
                         <h3 className="font-semibold">实现技术</h3>
                         <p className="text-muted-foreground">
                             通过强大的开源模型 <a href="https://github.com/DepthAnything/Depth-Anything-V2" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Depth-Anything-V2</a> 生成深度图，并结合 <a href="https://threejs.org/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Three.js</a> 在网页上构建和渲染3D场景，从而实现了“低配版”空间照片效果。
-                            此外，这个项目本身是 <a href="https://studio.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Firebase Studio</a> 构建的。
+                            此外，这个项目本身是 <a href="https://studio.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Firebase Studio</a> 构建的。开源地址：https://github.com/gengyj16/DepthWeaver
                         </p>
                     </div>
                 </CardContent>
