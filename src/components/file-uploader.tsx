@@ -77,7 +77,7 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
 
     return (
         <div className="space-y-2">
-            <div className='flex items-center justify-between min-h-[32px]'>
+            <div className='flex items-center justify-between h-9'>
                 <div className="flex items-center gap-2">
                     <label htmlFor={id} className="block text-sm font-medium text-foreground">{label}</label>
                 </div>
