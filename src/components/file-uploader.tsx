@@ -129,7 +129,7 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
                                         <Label htmlFor="api-url" className="font-bold">
                                             高级设置
                                         </Label>
-                                         <Label htmlFor="api-url">
+                                         <Label htmlFor="api-url" className="mt-2 block">
                                             API 地址
                                         </Label>
                                         <Input
