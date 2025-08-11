@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 
 interface FileUploaderProps {
-    onFilesSelected: (image: string, depthMap: string) => void;
+    onFilesSelected: (image: File, depthMap: File) => void;
 }
 
 interface FileInputBoxProps {
@@ -198,51 +198,22 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const defaultApiUrl = 'https://depth-anything-depth-anything-v2.hf.space';
     const [apiUrl, setApiUrl] = useState(defaultApiUrl);
 
-    const readFileAsDataURL = (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = (error) => reject(error);
-            reader.readAsDataURL(file);
-        });
-    };
-
     const handleSubmit = async () => {
         if (imageFile && depthMapFile) {
-            const imageB64 = await readFileAsDataURL(imageFile);
-            const depthMapB64 = await readFileAsDataURL(depthMapFile);
-            onFilesSelected(imageB64, depthMapB64);
+            onFilesSelected(imageFile, depthMapFile);
         }
     };
-
-    const dataURLtoBlob = (dataURL: string): Blob => {
-        const parts = dataURL.split(';base64,');
-        const contentType = parts[0].split(':')[1];
-        const raw = window.atob(parts[1]);
-        const rawLength = raw.length;
-        const uInt8Array = new Uint8Array(rawLength);
-        for (let i = 0; i < rawLength; ++i) {
-            uInt8Array[i] = raw.charCodeAt(i);
-        }
-        return new Blob([uInt8Array], { type: contentType });
-    };
-
+    
     const handleGenerateDepthMap = async (currentApiUrl: string) => {
         if (!imageFile) return;
 
         setIsGenerating(true);
         try {
-            // 使用上传的文件处理
-            const dataURL = await readFileAsDataURL(imageFile);
-            const blob = dataURLtoBlob(dataURL);
-            
-            // 创建FormData对象
             const formData = new FormData();
-            formData.append('files', blob, imageFile.name);
+            formData.append('files', imageFile);
             
             const effectiveApiUrl = currentApiUrl || defaultApiUrl;
 
-            // 首先上传文件
             const uploadResponse = await fetch(`${effectiveApiUrl}/upload`, {
                 method: 'POST',
                 body: formData
@@ -254,12 +225,10 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
 
             const uploadResult = await uploadResponse.json();
             
-            // 使用上传后的文件路径
             const requestData = {
                 data: [{ path: uploadResult[0] }]
             };
 
-            // Step 1: Initiate the process and get event_id
             const postResponse = await fetch(`${effectiveApiUrl}/call/on_submit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -277,20 +246,19 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 throw new Error('无法从初始响应中获取event_id。');
             }
 
-            // Step 2: Poll the event stream for the result
-            const eventSource = new EventSource(`${effectiveApiUrl}/call/on_submit/${eventId}`);
+            const eventSource = new EventSource(`${effectiveApiUrl}/queue/data?session_hash=${eventId}`);
             
-            eventSource.addEventListener('complete', async (event: MessageEvent) => {
-                const dataStr = event.data.replace(/^data: /, '');
-                const message = JSON.parse(dataStr);
-                eventSource.close();
-                setIsGenerating(false);
-                
-                if (message && Array.isArray(message)) {
-                    const image2 = message[1];
-                    if(image2 && image2.url){
-                        const resultUrlPath = image2.url.replace('/cal', '');
-                        const fullResultUrl = `${effectiveApiUrl}/file=${resultUrlPath}`;
+            eventSource.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.msg === 'process_completed') {
+                    eventSource.close();
+                    setIsGenerating(false);
+
+                    const output = data.output.data;
+                    if (output && Array.isArray(output) && output.length > 1) {
+                         const resultUrlPath = output[1].path;
+                         const fullResultUrl = `${effectiveApiUrl}/file=${resultUrlPath}`;
                         
                         try {
                             const imageResponse = await fetch(fullResultUrl);
@@ -309,19 +277,17 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                     } else {
                         toast({ variant: "destructive", title: "错误", description: "API返回结果中未找到深度图URL。" });
                     }
-                } else {
-                     console.error("生成失败:", message);
-                     toast({ variant: "destructive", title: "错误", description: "深度图生成失败。" });
+                } else if (data.msg === 'process_generating') {
+                    // Optional: handle progress updates
                 }
-            });
+            };
 
-            // 添加错误处理事件监听器
-            eventSource.addEventListener('error', (err) => {
+            eventSource.onerror = (err) => {
                 console.error("EventSource failed:", err);
                 eventSource.close();
                 toast({ variant: "destructive", title: "错误", description: "获取结果时发生错误。" });
                 setIsGenerating(false);
-            });
+            };
 
         } catch (error) {
             console.error("生成深度图时出错:", error);
