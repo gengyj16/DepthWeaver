@@ -75,7 +75,10 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
     return (
         <div className="space-y-2">
             <div className='flex items-center justify-between'>
-                <label htmlFor={id} className="block text-sm font-medium text-foreground">{label}</label>
+                <div className="flex items-center gap-2">
+                    <label htmlFor={id} className="block text-sm font-medium text-foreground">{label}</label>
+                    <p className="text-xs text-muted-foreground">{description}</p>
+                </div>
                 <div className="flex items-center gap-2">
                     {showGenerateButton && (
                         <Button 
@@ -348,4 +351,5 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     );
 }
 
+    
     
