@@ -52,8 +52,10 @@ export default function HomePage() {
 
   const saveHistory = (newHistory: HistoryEntry[]) => {
     try {
-      localStorage.setItem('depth-weaver-history', JSON.stringify(newHistory));
-      setHistory(newHistory);
+      // Limit history to 20 entries to avoid exceeding localStorage quota
+      const limitedHistory = newHistory.slice(0, 20);
+      localStorage.setItem('depth-weaver-history', JSON.stringify(limitedHistory));
+      setHistory(limitedHistory);
     } catch (error) {
       console.error("Failed to save history to localStorage", error);
     }
@@ -104,7 +106,17 @@ export default function HomePage() {
 
   return (
     <main className="relative h-screen w-full overflow-y-auto bg-background text-foreground">
-      <div className="h-screen w-full flex-shrink-0">
+      {backgroundMode === 'blur' && image && (
+        <div 
+          className="absolute inset-0 w-full h-full z-0 bg-cover bg-center"
+          style={{ 
+            backgroundImage: `url(${image})`,
+            filter: 'blur(20px)',
+            transform: 'scale(1.1)'
+          }}
+        />
+      )}
+      <div className="relative z-10 h-screen w-full flex-shrink-0">
         <header className="absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-end items-center">
           {image && depthMap && (
             <Button variant="outline" onClick={handleReset} className="bg-background/50 hover:bg-muted/80 backdrop-blur-sm">

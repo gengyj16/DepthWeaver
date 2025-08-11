@@ -75,6 +75,10 @@ export function DepthWeaverScene({
               sceneRef.current.background = null; 
           }
       }
+      if (rendererRef.current) {
+        // Ensure renderer's alpha setting matches the mode
+        rendererRef.current.setClearAlpha(backgroundMode === 'blur' ? 0 : 1);
+      }
   }, [backgroundMode, backgroundColor]);
 
   const onPointerMove = (event: PointerEvent) => {
@@ -166,6 +170,8 @@ export function DepthWeaverScene({
     sceneRef.current = scene;
     if (backgroundMode === 'solid') {
       scene.background = new THREE.Color(backgroundColor);
+    } else {
+      scene.background = null;
     }
 
     const camera = new THREE.PerspectiveCamera(75, currentMount.clientWidth / currentMount.clientHeight, 0.1, 100);
@@ -173,6 +179,7 @@ export function DepthWeaverScene({
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setClearAlpha(backgroundMode === 'blur' ? 0 : 1);
     renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -345,19 +352,9 @@ export function DepthWeaverScene({
           </div>
         </div>
       )}
-      {backgroundMode === 'blur' && image && (
-        <div 
-          className="absolute inset-0 w-full h-full z-[-1] bg-cover bg-center"
-          style={{ 
-            backgroundImage: `url(${image})`,
-            filter: 'blur(20px)',
-            transform: 'scale(1.1)'
-          }}
-        />
-      )}
       <div 
         ref={mountRef} 
-        className="absolute inset-0 w-full h-full z-0"
+        className="absolute inset-0 w-full h-full"
         style={{ touchAction: 'none' }}
       />
     </>
