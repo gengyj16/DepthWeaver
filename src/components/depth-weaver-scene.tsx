@@ -35,6 +35,7 @@ export function DepthWeaverScene({
   const cameraRef = useRef<THREE.PerspectiveCamera>();
   const meshRef = useRef<THREE.Mesh>();
   const sceneRef = useRef<THREE.Scene>();
+  const rendererRef = useRef<THREE.WebGLRenderer>();
   const keyRef = useRef(meshDetail);
   const maxAngleRef = useRef(THREE.MathUtils.degToRad(viewAngleLimit));
   
@@ -70,7 +71,8 @@ export function DepthWeaverScene({
           if (backgroundMode === 'solid') {
               sceneRef.current.background = new THREE.Color(backgroundColor);
           } else {
-              sceneRef.current.background = null;
+              // Setting to null will make it transparent, showing the blurred div behind.
+              sceneRef.current.background = null; 
           }
       }
   }, [backgroundMode, backgroundColor]);
@@ -175,6 +177,7 @@ export function DepthWeaverScene({
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     currentMount.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
 
     const loadingManager = new THREE.LoadingManager(() => {
         setIsLoading(false);
@@ -330,7 +333,7 @@ export function DepthWeaverScene({
       colorTexture.dispose();
       depthTexture.dispose();
     };
-  }, [image, depthMap, meshDetail, backgroundMode, backgroundColor]);
+  }, [image, depthMap, meshDetail]);
 
   return (
     <>

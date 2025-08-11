@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { DepthWeaverScene } from '@/components/depth-weaver-scene';
 import { FileUploader } from '@/components/file-uploader';
 import { Button } from '@/components/ui/button';
@@ -73,13 +73,13 @@ export default function HomePage() {
     saveHistory([newEntry, ...history]);
   };
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     // No need to revoke object URLs if we are using data URLs from history
     if (image && image.startsWith('blob:')) URL.revokeObjectURL(image);
     if (depthMap && depthMap.startsWith('blob:')) URL.revokeObjectURL(depthMap);
     setImage(null);
     setDepthMap(null);
-  };
+  }, [image, depthMap]);
   
   const handleLoadFromHistory = (entry: HistoryEntry) => {
     handleReset(); // Clear any existing blob URLs
