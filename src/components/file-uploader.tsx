@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 
 interface FileUploaderProps {
-    onFilesSelected: (image: File, depthMap: File) => void;
+    onFilesSelected: (image: string, depthMap: string) => void;
 }
 
 interface FileInputBoxProps {
@@ -197,12 +197,6 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const defaultApiUrl = 'https://depth-anything-depth-anything-v2.hf.space';
     const [apiUrl, setApiUrl] = useState(defaultApiUrl);
 
-    const handleSubmit = () => {
-        if (imageFile && depthMapFile) {
-            onFilesSelected(imageFile, depthMapFile);
-        }
-    };
-
     const readFileAsDataURL = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -210,6 +204,14 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             reader.onerror = (error) => reject(error);
             reader.readAsDataURL(file);
         });
+    };
+
+    const handleSubmit = async () => {
+        if (imageFile && depthMapFile) {
+            const imageB64 = await readFileAsDataURL(imageFile);
+            const depthMapB64 = await readFileAsDataURL(depthMapFile);
+            onFilesSelected(imageB64, depthMapB64);
+        }
     };
 
     const dataURLtoBlob = (dataURL: string): Blob => {
