@@ -159,8 +159,6 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
     });
     const depthTexture = textureLoader.load(depthMap);
     
-    colorTexture.colorSpace = THREE.SRGBColorSpace;
-    
     // Create geometry and material
     if (!meshRef.current || keyRef.current !== meshDetail) {
       if (meshRef.current) {
@@ -323,6 +321,3 @@ export function DepthWeaverScene({ image, depthMap, depthMultiplier, cameraDista
     </>
   );
 }
- 
-
-    
