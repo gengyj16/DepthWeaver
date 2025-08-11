@@ -210,12 +210,12 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         setIsGenerating(true);
         const errorHint = "可能的原因：1. 你的网络连接存在问题 2. 达到了API调用频率限制";
         let eventSource: EventSource | null = null;
+        
+        const effectiveApiUrl = currentApiUrl || defaultApiUrl;
 
         try {
             const formData = new FormData();
             formData.append('files', imageFile);
-            
-            const effectiveApiUrl = currentApiUrl || defaultApiUrl;
 
             const uploadResponse = await fetch(`${effectiveApiUrl}/upload`, {
                 method: 'POST',
@@ -227,6 +227,9 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             }
 
             const uploadResult = await uploadResponse.json();
+            if (!uploadResult || !Array.isArray(uploadResult) || !uploadResult[0]) {
+                throw new Error('文件上传后未收到有效的文件路径。');
+            }
             
             const requestData = {
                 data: [{ path: uploadResult[0] }]
@@ -239,32 +242,30 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             });
 
             if (!postResponse.ok) {
-                throw new Error(`初始请求失败，状态码: ${postResponse.status}`);
+                throw new Error(`启动任务失败，状态码: ${postResponse.status}`);
             }
 
             const postResult = await postResponse.json();
             const eventId = postResult.event_id;
 
             if (!eventId) {
-                throw new Error('无法从初始响应中获取event_id。');
+                throw new Error('无法从响应中获取 event_id。');
             }
 
-            eventSource = new EventSource(`${effectiveApiUrl}/queue/data?session_hash=${eventId}`);
+            eventSource = new EventSource(`${effectiveApiUrl}/call/on_submit/${eventId}`);
             
-            eventSource.onmessage = async (event) => {
-                const data = JSON.parse(event.data);
+            eventSource.addEventListener('complete', async (event) => {
+                if (eventSource) eventSource.close();
 
-                if (data.msg === 'process_completed') {
-                    if (eventSource) eventSource.close();
-                    setIsGenerating(false);
-
-                    const output = data.output.data;
-                    if (output && Array.isArray(output) && output.length > 1 && output[1].path) {
-                         const resultUrlPath = output[1].path;
-                         const fullResultUrl = `${effectiveApiUrl}/file=${resultUrlPath}`;
-                        
+                const dataStr = (event as MessageEvent).data;
+                const outputData = JSON.parse(dataStr);
+                
+                if (outputData && Array.isArray(outputData) && outputData.length > 1) {
+                    const image2 = outputData[1];
+                    if(image2 && image2.url){
+                        const resultUrl = image2.url;
                         try {
-                            const imageResponse = await fetch(fullResultUrl);
+                            const imageResponse = await fetch(resultUrl);
                             if (!imageResponse.ok) {
                                 throw new Error(`下载深度图失败，状态码: ${imageResponse.status}`);
                             }
@@ -278,12 +279,14 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                             }
                         }
                     } else {
-                        toast({ variant: "destructive", title: "错误", description: `API返回结果中未找到深度图URL。 ${errorHint}` });
+                         throw new Error('API返回结果格式不正确，缺少URL。');
                     }
-                } else if (data.msg === 'process_generating') {
-                    // Optional: handle progress updates
+                } else {
+                    throw new Error('API返回结果格式不正确。');
                 }
-            };
+                setIsGenerating(false);
+            });
+
 
             eventSource.onerror = (err) => {
                 console.error("EventSource failed:", err);
