@@ -157,7 +157,7 @@ export default function HomePage() {
                   )}
                 </div>
                 <CollapsibleContent>
-                  <div className="p-6 bg-background/80 backdrop-blur-lg rounded-2xl shadow-lg space-y-4 border border-border/20">
+                  <div className="p-6 bg-background/50 backdrop-blur-lg rounded-2xl shadow-lg space-y-4 border border-border/20">
                     <div className="flex items-center justify-between">
                        <h3 className="text-lg font-semibold">控制面板</h3>
                        <CollapsibleTrigger asChild>
