@@ -36,6 +36,7 @@ export default function HomePage() {
   const [backgroundMode, setBackgroundMode] = useState<'blur' | 'solid'>('blur');
   const [backgroundColor, setBackgroundColor] = useState('#000000');
   const [containerHeight, setContainerHeight] = useState<string | number>('100vh');
+  const [filterMode, setFilterMode] = useState<'gaussian' | 'edge-preserving'>('gaussian');
 
 
   useEffect(() => {
@@ -136,7 +137,7 @@ export default function HomePage() {
           />
           <div className="relative z-10 h-full w-full">
             <header className="absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-end items-center">
-                <Button variant="outline" onClick={handleReset} className="bg-background/50 hover:bg-muted/80 backdrop-blur-sm">
+                <Button variant="outline" onClick={handleReset} className="bg-background/20 hover:bg-muted/30 backdrop-blur-sm border-white/10">
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   返回
                 </Button>
@@ -154,6 +155,7 @@ export default function HomePage() {
               useSensor={useSensor}
               backgroundMode={backgroundMode}
               backgroundColor={backgroundMode === 'solid' ? backgroundColor : 'transparent'}
+              filterMode={filterMode}
             />
 
             <div className="absolute bottom-6 right-6 z-20">
@@ -165,14 +167,14 @@ export default function HomePage() {
                  <div className="flex justify-end">
                   {!isControlsOpen && (
                     <CollapsibleTrigger asChild>
-                      <Button variant="outline" size="icon" className="rounded-full h-12 w-12 bg-background/50 hover:bg-muted/80 backdrop-blur-sm shadow-lg">
+                      <Button variant="outline" size="icon" className="rounded-full h-12 w-12 bg-background/20 hover:bg-muted/30 backdrop-blur-sm shadow-lg border-white/10">
                         <Settings className="h-6 w-6" />
                       </Button>
                     </CollapsibleTrigger>
                   )}
                 </div>
                 <CollapsibleContent>
-                  <div className="p-6 bg-background/20 backdrop-blur-sm rounded-2xl shadow-lg space-y-4 border border-border/20">
+                  <div className="p-6 bg-background/20 backdrop-blur-sm rounded-2xl shadow-lg space-y-4 border border-white/10">
                     <div className="flex items-center justify-between">
                        <h3 className="text-lg font-semibold">控制面板</h3>
                        <CollapsibleTrigger asChild>
@@ -183,7 +185,7 @@ export default function HomePage() {
                     </div>
 
                     <div className="space-y-6">
-                      <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm bg-background/30">
+                      <div className="flex items-center justify-between rounded-lg p-3 shadow-sm bg-background/30">
                         <Label htmlFor="sensor-mode" className="font-semibold">
                           跟随传感器方向
                         </Label>
@@ -201,13 +203,13 @@ export default function HomePage() {
                           <RadioGroup value={backgroundMode} onValueChange={(value: 'blur' | 'solid') => setBackgroundMode(value)} className="grid grid-cols-2 gap-2">
                             <div>
                               <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" />
-                              <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-muted bg-background/30 p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                              <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-white/20 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-white/20 [&:has([data-state=checked])]:border-primary">
                                 模糊背景
                               </Label>
                             </div>
                             <div>
                               <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" />
-                              <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-muted bg-background/30 p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                              <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-white/20 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-white/20 [&:has([data-state=checked])]:border-primary">
                                 纯色
                               </Label>
                             </div>
@@ -215,7 +217,7 @@ export default function HomePage() {
                       </div>
 
                       {backgroundMode === 'solid' && (
-                        <div className="flex items-center gap-4 rounded-lg border p-3 shadow-sm bg-background/30">
+                        <div className="flex items-center gap-4 rounded-lg p-3 shadow-sm bg-background/30">
                           <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
                           <Input 
                             id="bg-color-picker"
@@ -226,6 +228,24 @@ export default function HomePage() {
                           />
                         </div>
                       )}
+
+                      <div className="flex flex-col gap-2">
+                          <Label className="text-center">边缘处理</Label>
+                          <RadioGroup value={filterMode} onValueChange={(value: 'gaussian' | 'edge-preserving') => setFilterMode(value)} className="grid grid-cols-2 gap-2">
+                              <div>
+                                  <RadioGroupItem value="gaussian" id="filter-gaussian" className="peer sr-only" />
+                                  <Label htmlFor="filter-gaussian" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-white/20 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-white/20 [&:has([data-state=checked])]:border-primary">
+                                      高斯模糊
+                                  </Label>
+                              </div>
+                              <div>
+                                  <RadioGroupItem value="edge-preserving" id="filter-edge" className="peer sr-only" />
+                                  <Label htmlFor="filter-edge" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-white/20 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-white/20 [&:has([data-state=checked])]:border-primary">
+                                      边缘保留
+                                  </Label>
+                              </div>
+                          </RadioGroup>
+                      </div>
 
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
@@ -304,5 +324,3 @@ export default function HomePage() {
     </main>
   );
 }
-
-    
