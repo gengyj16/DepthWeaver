@@ -170,7 +170,7 @@ export default function HomePage() {
                     <div className="space-y-6">
                       <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm bg-background/30">
                         <Label htmlFor="sensor-mode" className="font-semibold">
-                          遵循传感器方向
+                          跟随传感器方向
                         </Label>
                         <Switch
                           id="sensor-mode"
