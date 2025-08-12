@@ -197,6 +197,27 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const { toast } = useToast();
     const defaultApiUrl = 'https://depth-anything-depth-anything-v2.hf.space';
     const [apiUrl, setApiUrl] = useState(defaultApiUrl);
+    
+    useEffect(() => {
+        try {
+            const savedApiUrl = localStorage.getItem('depthApiUrl');
+            if (savedApiUrl) {
+                setApiUrl(savedApiUrl);
+            }
+        } catch (error) {
+            console.error("Failed to read from localStorage", error);
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            if (apiUrl !== defaultApiUrl) {
+                localStorage.setItem('depthApiUrl', apiUrl);
+            }
+        } catch (error) {
+            console.error("Failed to write to localStorage", error);
+        }
+    }, [apiUrl, defaultApiUrl]);
 
     const handleSubmit = async () => {
         if (imageFile && depthMapFile) {
@@ -356,6 +377,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
 
     
 
