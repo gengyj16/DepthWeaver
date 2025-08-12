@@ -28,7 +28,7 @@ export default function HomePage() {
   const [cameraDistance, setCameraDistance] = useState(2);
   const [meshDetail, setMeshDetail] = useState(1024);
   const [blurIntensity, setBlurIntensity] = useState(1.0);
-  const [viewAngleLimit, setViewAngleLimit] = useState(90);
+  const [viewAngleLimit, setViewAngleLimit] = useState(10);
   const [isControlsOpen, setIsControlsOpen] = useState(false);
   const [useSensor, setUseSensor] = useState(false);
   const [sensorSupported, setSensorSupported] = useState(true);
