@@ -222,7 +222,7 @@ export default function HomePage() {
                             type="color" 
                             value={backgroundColor} 
                             onChange={(e) => setBackgroundColor(e.target.value)}
-                            className="w-24 h-8 p-1"
+                            className="w-24 h-8 p-1 border-none"
                           />
                         </div>
                       )}
