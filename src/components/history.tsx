@@ -106,7 +106,7 @@ export function HistoryList({ history, onLoad, onDelete }: HistoryListProps) {
      <Card className="w-full max-w-2xl bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl shadow-black/20">
       <CardHeader>
         <CardTitle className="text-center text-2xl font-bold">历史记录</CardTitle>
-        <CardDescription className="text-center">点击卡片以载入</CardDescription>
+        <CardDescription className="text-center">点击卡片进入场景</CardDescription>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-80 w-full">
