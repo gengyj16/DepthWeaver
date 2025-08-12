@@ -217,7 +217,7 @@ export default function HomePage() {
                         <Slider 
                           id="depth-slider"
                           min={0}
-                          max={1}
+                          max={5}
                           step={0.01}
                           value={[depthMultiplier]}
                           onValueChange={(value) => setDepthMultiplier(value[0])}
@@ -228,7 +228,7 @@ export default function HomePage() {
                         <Slider
                           id="zoom-slider"
                           min={0.5}
-                          max={2.5}
+                          max={5}
                           step={0.01}
                           value={[cameraDistance]}
                           onValueChange={(value) => setCameraDistance(value[0])}
@@ -261,7 +261,7 @@ export default function HomePage() {
                         <Slider
                           id="angle-limit-slider"
                           min={0}
-                          max={45}
+                          max={90}
                           step={1}
                           value={[viewAngleLimit]}
                           onValueChange={(value) => setViewAngleLimit(value[0])}
