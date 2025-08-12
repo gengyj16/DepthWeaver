@@ -217,12 +217,12 @@ export default function HomePage() {
                       {backgroundMode === 'solid' && (
                         <div className="flex items-center gap-4 rounded-lg p-3 bg-background/30">
                           <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
-                          <Input 
+                          <input 
                             id="bg-color-picker"
                             type="color" 
                             value={backgroundColor} 
                             onChange={(e) => setBackgroundColor(e.target.value)}
-                            className="w-24 h-8 p-1 border-none"
+                            className="w-24 h-8 p-0 bg-transparent border-none cursor-pointer"
                           />
                         </div>
                       )}
