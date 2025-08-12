@@ -28,13 +28,14 @@ export default function HomePage() {
   const [cameraDistance, setCameraDistance] = useState(2);
   const [meshDetail, setMeshDetail] = useState(1024);
   const [blurIntensity, setBlurIntensity] = useState(1.0);
-  const [viewAngleLimit, setViewAngleLimit] = useState(10);
+  const [viewAngleLimit, setViewAngleLimit] = useState(90);
   const [isControlsOpen, setIsControlsOpen] = useState(false);
   const [useSensor, setUseSensor] = useState(false);
   const [sensorSupported, setSensorSupported] = useState(true);
   const [history, setHistory] = useState<HistoryDbEntry[]>([]);
   const [backgroundMode, setBackgroundMode] = useState<'blur' | 'solid'>('blur');
   const [backgroundColor, setBackgroundColor] = useState('#000000');
+  const [containerHeight, setContainerHeight] = useState<string | number>('100vh');
 
 
   useEffect(() => {
@@ -51,6 +52,17 @@ export default function HomePage() {
       }
     };
     loadHistory();
+
+    const handleResize = () => {
+      setContainerHeight(window.innerHeight);
+    };
+
+    window.addEventListener('resize', handleResize);
+    handleResize(); 
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const handleFilesChange = async (imageFile: File, depthMapFile: File) => {
@@ -104,10 +116,13 @@ export default function HomePage() {
   const isSceneVisible = image && depthMap;
 
   return (
-    <main className={cn(
-      "relative w-full bg-background text-foreground",
-      isSceneVisible ? "h-screen overflow-hidden" : "min-h-screen"
-    )}>
+    <main 
+      className={cn(
+        "relative w-full bg-background text-foreground",
+        !isSceneVisible && "min-h-screen"
+      )}
+      style={{ height: isSceneVisible ? containerHeight : 'auto', overflow: isSceneVisible ? 'hidden' : 'visible' }}
+    >
       {isSceneVisible ? (
         <>
           <div 
@@ -289,3 +304,5 @@ export default function HomePage() {
     </main>
   );
 }
+
+    
