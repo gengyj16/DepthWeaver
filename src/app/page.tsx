@@ -186,13 +186,13 @@ export default function HomePage() {
                           <RadioGroup value={backgroundMode} onValueChange={(value: 'blur' | 'solid') => setBackgroundMode(value)} className="grid grid-cols-2 gap-2">
                             <div>
                               <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" />
-                              <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                              <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-muted bg-background/30 p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
                                 模糊背景
                               </Label>
                             </div>
                             <div>
                               <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" />
-                              <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                              <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-muted bg-background/30 p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
                                 纯色
                               </Label>
                             </div>
