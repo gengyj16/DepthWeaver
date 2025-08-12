@@ -36,7 +36,6 @@ export default function HomePage() {
   const [backgroundMode, setBackgroundMode] = useState<'blur' | 'solid'>('blur');
   const [backgroundColor, setBackgroundColor] = useState('#000000');
   const [containerHeight, setContainerHeight] = useState<string | number>('100vh');
-  const [filterMode, setFilterMode] = useState<'gaussian' | 'edge-preserving'>('gaussian');
 
 
   useEffect(() => {
@@ -155,7 +154,6 @@ export default function HomePage() {
               useSensor={useSensor}
               backgroundMode={backgroundMode}
               backgroundColor={backgroundMode === 'solid' ? backgroundColor : 'transparent'}
-              filterMode={filterMode}
             />
 
             <div className="absolute bottom-6 right-6 z-20">
@@ -185,7 +183,7 @@ export default function HomePage() {
                     </div>
 
                     <div className="space-y-6">
-                      <div className="flex items-center justify-between rounded-lg p-3 shadow-sm bg-background/30">
+                      <div className="flex items-center justify-between rounded-lg p-3 bg-background/30">
                         <Label htmlFor="sensor-mode" className="font-semibold">
                           跟随传感器方向
                         </Label>
@@ -217,7 +215,7 @@ export default function HomePage() {
                       </div>
 
                       {backgroundMode === 'solid' && (
-                        <div className="flex items-center gap-4 rounded-lg p-3 shadow-sm bg-background/30">
+                        <div className="flex items-center gap-4 rounded-lg p-3 bg-background/30">
                           <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
                           <Input 
                             id="bg-color-picker"
@@ -228,24 +226,6 @@ export default function HomePage() {
                           />
                         </div>
                       )}
-
-                      <div className="flex flex-col gap-2">
-                          <Label className="text-center">边缘处理</Label>
-                          <RadioGroup value={filterMode} onValueChange={(value: 'gaussian' | 'edge-preserving') => setFilterMode(value)} className="grid grid-cols-2 gap-2">
-                              <div>
-                                  <RadioGroupItem value="gaussian" id="filter-gaussian" className="peer sr-only" />
-                                  <Label htmlFor="filter-gaussian" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-white/20 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-white/20 [&:has([data-state=checked])]:border-primary">
-                                      高斯模糊
-                                  </Label>
-                              </div>
-                              <div>
-                                  <RadioGroupItem value="edge-preserving" id="filter-edge" className="peer sr-only" />
-                                  <Label htmlFor="filter-edge" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-white/20 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-white/20 [&:has([data-state=checked])]:border-primary">
-                                      边缘保留
-                                  </Label>
-                              </div>
-                          </RadioGroup>
-                      </div>
 
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
