@@ -223,8 +223,11 @@ export default function HomePage() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>导出3D模型</DialogTitle>
-                  <DialogDescription>
-                    此功能将把当前场景中的3D网格（包含顶点位移和纹理）导出为GLB文件。请注意，导出过程可能需要一些时间，因为它需要在CPU上重新计算所有顶点的位移。
+                  <DialogDescription asChild>
+                    <div>
+                        <p>此功能将把当前场景中的3D网格（包含顶点位移和纹理）导出为GLB文件。请注意，导出过程可能需要一些时间，因为它需要在CPU上重新计算所有顶点的位移。</p>
+                        <p className="mt-2 font-semibold text-destructive">注意：渲染模式设置中的效果（如边界模糊）不包含在导出的模型中。</p>
+                    </div>
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
@@ -463,5 +466,3 @@ export default function HomePage() {
     </main>
   );
 }
-
-    
