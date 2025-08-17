@@ -81,48 +81,84 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   
   const initialOrientationRef = useRef<{ beta: number | null, gamma: number | null }>({ beta: null, gamma: null });
 
+  const renderRequestedRef = useRef(false);
+
+  const requestRenderIfNotRequested = () => {
+    if (!renderRequestedRef.current) {
+      renderRequestedRef.current = true;
+      requestAnimationFrame(renderScene);
+    }
+  };
+
+  const renderScene = () => {
+    renderRequestedRef.current = false;
+    if (rendererRef.current && sceneRef.current && cameraRef.current) {
+      rendererRef.current.render(sceneRef.current, cameraRef.current);
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     async handleExport(format: 'glb') {
-      if (!meshRef.current || format !== 'glb') {
+      if (!meshRef.current || !rendererRef.current || !sceneRef.current || !cameraRef.current || format !== 'glb') {
         throw new Error('Export is not ready or format is not supported.');
       }
-
-      const exporter = new GLTFExporter();
-      const originalMesh = meshRef.current;
-
-      const depthData = await getDepthDataFromImage(depthMap);
-      const { width: depthWidth, height: depthHeight } = depthData;
-      
-      const clonedGeometry = originalMesh.geometry.clone();
-      const positionAttribute = clonedGeometry.getAttribute('position');
-      const uvAttribute = clonedGeometry.getAttribute('uv');
-
-      for (let i = 0; i < positionAttribute.count; i++) {
-        const u = uvAttribute.getX(i);
-        const v = 1 - uvAttribute.getY(i); // Flip V for canvas coordinates
-
-        const pixelX = Math.floor(u * (depthWidth - 1));
-        const pixelY = Math.floor(v * (depthHeight - 1));
-        const pixelIndex = (pixelY * depthWidth + pixelX) * 4;
-
-        // Assuming grayscale depth map, so R, G, and B are the same.
-        const depth = depthData.data[pixelIndex] / 255.0; 
-        const displacement = depth * depthMultiplier;
+    
+      setIsLoading(true);
+    
+      try {
+        const exporter = new GLTFExporter();
+        const originalMesh = meshRef.current;
+        const originalMaterial = originalMesh.material as THREE.ShaderMaterial;
+    
+        // 1. Off-screen render to bake texture
+        const renderTarget = new THREE.WebGLRenderer({ 
+          antialias: true,
+          alpha: true
+        });
+        renderTarget.setSize(originalMaterial.uniforms.uResolution.value.x, originalMaterial.uniforms.uResolution.value.y);
+        renderTarget.outputColorSpace = THREE.SRGBColorSpace;
         
-        const originalZ = positionAttribute.getZ(i);
-        const normalZ = 1; 
-        positionAttribute.setZ(i, originalZ + normalZ * displacement);
-      }
-      
-      return new Promise<void>((resolve, reject) => {
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.load(image, (texture) => {
-          texture.colorSpace = THREE.SRGBColorSpace;
-          const exportMaterial = new THREE.MeshBasicMaterial({ map: texture });
-          
+        const bakedTexture = new THREE.WebGLRenderTarget(
+          originalMaterial.uniforms.uResolution.value.x,
+          originalMaterial.uniforms.uResolution.value.y,
+          {
+            minFilter: THREE.LinearFilter,
+            magFilter: THREE.LinearFilter,
+            format: THREE.RGBAFormat,
+            type: THREE.UnsignedByteType,
+            colorSpace: THREE.SRGBColorSpace,
+          }
+        );
+    
+        rendererRef.current.setRenderTarget(bakedTexture);
+        rendererRef.current.render(sceneRef.current, cameraRef.current);
+        rendererRef.current.setRenderTarget(null);
+    
+        // 2. Displace vertices on CPU
+        const depthData = await getDepthDataFromImage(depthMap);
+        const { width: depthWidth, height: depthHeight } = depthData;
+        
+        const clonedGeometry = originalMesh.geometry.clone();
+        const positionAttribute = clonedGeometry.getAttribute('position');
+        const uvAttribute = clonedGeometry.getAttribute('uv');
+    
+        for (let i = 0; i < positionAttribute.count; i++) {
+          const u = uvAttribute.getX(i);
+          const v = 1 - uvAttribute.getY(i);
+          const pixelX = Math.floor(u * (depthWidth - 1));
+          const pixelY = Math.floor(v * (depthHeight - 1));
+          const pixelIndex = (pixelY * depthWidth + pixelX) * 4;
+          const depth = depthData.data[pixelIndex] / 255.0; 
+          const displacement = depth * depthMultiplier;
+          positionAttribute.setZ(i, originalMesh.geometry.attributes.position.getZ(i) + displacement);
+        }
+    
+        // 3. Create export mesh with baked texture and export
+        return new Promise<void>((resolve, reject) => {
+          const exportMaterial = new THREE.MeshBasicMaterial({ map: bakedTexture.texture });
           const exportMesh = new THREE.Mesh(clonedGeometry, exportMaterial);
           exportMesh.scale.copy(originalMesh.scale);
-
+    
           exporter.parse(
             exportMesh,
             (gltf) => {
@@ -141,24 +177,25 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
             },
             { binary: true }
           );
-        }, undefined, (error) => {
-          console.error('An error happened during texture loading', error);
-          reject(new Error('Failed to load texture for export.'));
         });
-      });
+      } finally {
+        setIsLoading(false);
+      }
     }
   }));
-
 
   useEffect(() => {
     if (materialRef.current) {
         materialRef.current.uniforms.uDepthMultiplier.value = depthMultiplier;
+        requestRenderIfNotRequested();
     }
   }, [depthMultiplier]);
   
   useEffect(() => {
     if (cameraRef.current && cameraRef.current.type === 'PerspectiveCamera') {
         (cameraRef.current as THREE.PerspectiveCamera).position.z = cameraDistance;
+        cameraRef.current.updateProjectionMatrix();
+        requestRenderIfNotRequested();
     }
   }, [cameraDistance]);
 
@@ -166,30 +203,35 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     if (cameraRef.current && cameraRef.current.type === 'OrthographicCamera') {
         (cameraRef.current as THREE.OrthographicCamera).zoom = orthographicZoom;
         cameraRef.current.updateProjectionMatrix();
+        requestRenderIfNotRequested();
     }
   }, [orthographicZoom]);
 
   useEffect(() => {
     if (materialRef.current) {
         materialRef.current.uniforms.uBlurIntensity.value = blurIntensity;
+        requestRenderIfNotRequested();
     }
   }, [blurIntensity]);
   
   useEffect(() => {
     if (materialRef.current) {
       materialRef.current.uniforms.uBlurOffset.value = blurOffset;
+      requestRenderIfNotRequested();
     }
   }, [blurOffset]);
   
   useEffect(() => {
     if (materialRef.current) {
       materialRef.current.uniforms.uRenderMode.value = renderMode === 'fill' ? 1 : 0;
+      requestRenderIfNotRequested();
     }
   }, [renderMode]);
 
   useEffect(() => {
     if (materialRef.current) {
       materialRef.current.uniforms.uSelectionRange.value = selectionRange;
+      requestRenderIfNotRequested();
     }
   }, [selectionRange]);
 
@@ -205,18 +247,15 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
               sceneRef.current.background = null; 
           }
           rendererRef.current.setClearAlpha(backgroundMode === 'blur' ? 0 : 1);
+          requestRenderIfNotRequested();
       }
   }, [backgroundMode, backgroundColor]);
 
-  // Effect for updating mesh detail
   useEffect(() => {
-    if (meshRef.current) {
-      setIsLoading(true);
-      // Dispose the old geometry to free up memory
+    if (meshRef.current && meshRef.current.geometry.parameters.widthSegments !== meshDetail) {
       meshRef.current.geometry.dispose();
-      // Create and assign the new geometry
       meshRef.current.geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
-      setIsLoading(false);
+      requestRenderIfNotRequested();
     }
   }, [meshDetail]);
 
@@ -231,6 +270,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
       previousPointerPosition.current.x = event.clientX;
       previousPointerPosition.current.y = event.clientY;
+      requestRenderIfNotRequested();
   };
 
   const onPointerUp = () => {
@@ -258,13 +298,14 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         initialOrientationRef.current = { beta: event.beta, gamma: event.gamma };
       }
       
-      const beta = event.beta - initialOrientationRef.current.beta;  // Front-back tilt
-      const gamma = event.gamma - initialOrientationRef.current.gamma; // Left-right tilt
+      const beta = event.beta - initialOrientationRef.current.beta;
+      const gamma = event.gamma - initialOrientationRef.current.gamma;
 
       const maxAngle = maxAngleRef.current;
       
       meshRef.current.rotation.x = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(beta * -0.5), -maxAngle, maxAngle);
       meshRef.current.rotation.y = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(gamma * -0.5), -maxAngle, maxAngle);
+      requestRenderIfNotRequested();
   };
 
 
@@ -287,6 +328,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       if (meshRef.current) {
         meshRef.current.rotation.x = 0;
         meshRef.current.rotation.y = 0;
+        requestRenderIfNotRequested();
       }
        if(currentMount) currentMount.style.cursor = 'grab';
     }
@@ -320,7 +362,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         const frustumSize = 2;
         camera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 0.1, 100);
         camera.zoom = orthographicZoom;
-        camera.position.z = 2; // Position doesn't affect size, but needs to be outside the mesh
+        camera.position.z = 2;
         camera.updateProjectionMatrix();
     }
     
@@ -337,6 +379,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
     const loadingManager = new THREE.LoadingManager(() => {
         setIsLoading(false);
+        requestRenderIfNotRequested();
     });
     const textureLoader = new THREE.TextureLoader(loadingManager);
     
@@ -421,13 +464,8 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
                   float sampleDepth = getDepth(sampleUV);
                   float depthDiff = sampleDepth - centerDepth;
 
-                  // Weight based on offset from center (for gaussian blur)
                   float weight = exp(-(float(x*x + y*y) / (2.0 * 16.0)));
 
-                  // Adjust weight based on depth difference and blur offset
-                  // uBlurOffset = -1: Only use foreground (depth < centerDepth)
-                  // uBlurOffset =  1: Only use background (depth > centerDepth)
-                  // uBlurOffset =  0: Use both
                   float depthWeight = 1.0 - (uBlurOffset * sign(depthDiff));
                   weight *= clamp(depthWeight, 0.0, 1.0);
 
@@ -439,7 +477,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
               if (totalWeight > 0.0) {
                 gl_FragColor = blurredColor / totalWeight;
               } else {
-                // Fallback to original color if no pixels were weighted
                 gl_FragColor = texture2D(uTexture, vUv);
               }
 
@@ -458,6 +495,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     textureLoader.load(image, (texture) => {
         const aspect = texture.image.naturalWidth / texture.image.naturalHeight;
         plane.scale.set(aspect, 1, 1);
+        requestRenderIfNotRequested();
     });
 
     scene.add(plane);
@@ -473,54 +511,44 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     const handleResize = () => {
       const width = currentMount.clientWidth;
       const height = currentMount.clientHeight;
-      renderer.setSize(width, height);
+      if (rendererRef.current) {
+        rendererRef.current.setSize(width, height);
+      }
       if (materialRef.current) {
         materialRef.current.uniforms.uResolution.value.set(width, height);
       }
       
-      const newAspect = width / height;
-      if (camera.type === 'PerspectiveCamera') {
-        (camera as THREE.PerspectiveCamera).aspect = newAspect;
-      } else if (camera.type === 'OrthographicCamera') {
-        const cam = camera as THREE.OrthographicCamera;
-        const frustumSize = 2;
-        cam.left = frustumSize * newAspect / -2;
-        cam.right = frustumSize * newAspect / 2;
-        cam.top = frustumSize / 2;
-        cam.bottom = frustumSize / -2;
+      const cam = cameraRef.current;
+      if (cam) {
+        const newAspect = width / height;
+        if (cam.type === 'PerspectiveCamera') {
+          (cam as THREE.PerspectiveCamera).aspect = newAspect;
+        } else if (cam.type === 'OrthographicCamera') {
+          const orthoCam = cam as THREE.OrthographicCamera;
+          const frustumSize = 2;
+          orthoCam.left = frustumSize * newAspect / -2;
+          orthoCam.right = frustumSize * newAspect / 2;
+          orthoCam.top = frustumSize / 2;
+          orthoCam.bottom = frustumSize / -2;
+        }
+        cam.updateProjectionMatrix();
       }
-      camera.updateProjectionMatrix();
+      requestRenderIfNotRequested();
     };
     window.addEventListener('resize', handleResize);
 
-    let animationFrameId: number;
-    const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
-      renderer.render(scene, camera);
-    };
-    animate();
+    requestRenderIfNotRequested();
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
       currentMount.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('deviceorientation', handleDeviceOrientation);
 
-      // Dispose of Three.js objects
       if (meshRef.current) {
-        if(meshRef.current.geometry) {
-            meshRef.current.geometry.dispose();
-        }
-        if(meshRef.current.material) {
-            // If the material is an array, dispose each one.
-            if (Array.isArray(meshRef.current.material)) {
-                meshRef.current.material.forEach(material => material.dispose());
-            } else {
-                (meshRef.current.material as THREE.Material).dispose();
-            }
-        }
+        if(meshRef.current.geometry) meshRef.current.geometry.dispose();
+        if(materialRef.current) materialRef.current.dispose();
         scene.remove(meshRef.current);
         meshRef.current = undefined;
       }
@@ -528,11 +556,12 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       colorTexture.dispose();
       depthTexture.dispose();
 
-      if (renderer) {
-        renderer.dispose();
-        if (renderer.domElement && currentMount.contains(renderer.domElement)) {
-           currentMount.removeChild(renderer.domElement);
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+        if (rendererRef.current.domElement && currentMount.contains(rendererRef.current.domElement)) {
+           currentMount.removeChild(rendererRef.current.domElement);
         }
+        rendererRef.current = undefined;
       }
     };
   }, [image, depthMap, cameraType]);
@@ -556,3 +585,5 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   );
 });
 DepthWeaverScene.displayName = 'DepthWeaverScene';
+
+    
