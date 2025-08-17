@@ -1,8 +1,9 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import * as THREE from 'three';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 
 type RenderMode = 'blur' | 'fill';
 type CameraType = 'perspective' | 'orthographic';
@@ -25,7 +26,31 @@ interface DepthWeaverSceneProps {
   cameraType: CameraType;
 }
 
-export function DepthWeaverScene({ 
+export interface DepthWeaverSceneHandle {
+  handleExport: (format: 'glb') => Promise<void>;
+}
+
+const getDepthDataFromImage = (imageUrl: string): Promise<ImageData> => {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'Anonymous';
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        return reject(new Error('Failed to get canvas context'));
+      }
+      context.drawImage(image, 0, 0);
+      resolve(context.getImageData(0, 0, image.width, image.height));
+    };
+    image.onerror = (err) => reject(err);
+    image.src = imageUrl;
+  });
+};
+
+export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSceneProps>(({ 
   image, 
   depthMap, 
   depthMultiplier, 
@@ -41,7 +66,7 @@ export function DepthWeaverScene({
   renderMode,
   selectionRange,
   cameraType,
-}: DepthWeaverSceneProps) {
+}, ref) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const materialRef = useRef<THREE.ShaderMaterial>();
@@ -55,6 +80,70 @@ export function DepthWeaverScene({
   const previousPointerPosition = useRef({ x: 0, y: 0 });
   
   const initialOrientationRef = useRef<{ beta: number | null, gamma: number | null }>({ beta: null, gamma: null });
+
+  useImperativeHandle(ref, () => ({
+    async handleExport(format: 'glb') {
+      if (!meshRef.current || format !== 'glb') {
+        throw new Error('Export is not ready or format is not supported.');
+      }
+
+      const exporter = new GLTFExporter();
+      const originalMesh = meshRef.current;
+
+      const depthData = await getDepthDataFromImage(depthMap);
+      const { width: depthWidth, height: depthHeight } = depthData;
+      
+      const clonedGeometry = originalMesh.geometry.clone();
+      const positionAttribute = clonedGeometry.getAttribute('position');
+      const uvAttribute = clonedGeometry.getAttribute('uv');
+
+      for (let i = 0; i < positionAttribute.count; i++) {
+        const u = uvAttribute.getX(i);
+        const v = 1 - uvAttribute.getY(i); // Flip V for canvas coordinates
+
+        const pixelX = Math.floor(u * (depthWidth - 1));
+        const pixelY = Math.floor(v * (depthHeight - 1));
+        const pixelIndex = (pixelY * depthWidth + pixelX) * 4;
+
+        // Assuming grayscale depth map, so R, G, and B are the same.
+        const depth = depthData.data[pixelIndex] / 255.0; 
+        const displacement = depth * depthMultiplier;
+        
+        const originalZ = positionAttribute.getZ(i);
+        const normalZ = 1; 
+        positionAttribute.setZ(i, originalZ + normalZ * displacement);
+      }
+      
+      const texture = new THREE.TextureLoader().load(image);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      const exportMaterial = new THREE.MeshBasicMaterial({ map: texture });
+      
+      const exportMesh = new THREE.Mesh(clonedGeometry, exportMaterial);
+      exportMesh.scale.copy(originalMesh.scale);
+      
+      return new Promise<void>((resolve, reject) => {
+        exporter.parse(
+          exportMesh,
+          (gltf) => {
+            const blob = new Blob([gltf as ArrayBuffer], { type: 'model/gltf-binary' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `scene-${Date.now()}.glb`;
+            a.click();
+            URL.revokeObjectURL(url);
+            resolve();
+          },
+          (error) => {
+            console.error('An error happened during parsing', error);
+            reject(new Error('Failed to export GLB.'));
+          },
+          { binary: true }
+        );
+      });
+    }
+  }));
+
 
   useEffect(() => {
     if (materialRef.current) {
@@ -460,4 +549,7 @@ export function DepthWeaverScene({
       />
     </>
   );
-}
+});
+DepthWeaverScene.displayName = 'DepthWeaverScene';
+
+    

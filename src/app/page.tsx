@@ -1,11 +1,11 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { DepthWeaverScene } from '@/components/depth-weaver-scene';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { DepthWeaverScene, type DepthWeaverSceneHandle } from '@/components/depth-weaver-scene';
 import { FileUploader } from '@/components/file-uploader';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Settings } from 'lucide-react';
+import { ArrowLeft, Settings, Download, Loader2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Switch } from "@/components/ui/switch"
@@ -14,6 +14,14 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { addHistory, getHistory, deleteHistory, type HistoryDbEntry } from '@/lib/db';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   Sheet,
   SheetContent,
@@ -47,6 +55,9 @@ export default function HomePage() {
   const [renderMode, setRenderMode] = useState<RenderMode>('blur');
   const [selectionRange, setSelectionRange] = useState(10);
   const [cameraType, setCameraType] = useState<CameraType>('perspective');
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const sceneRef = useRef<DepthWeaverSceneHandle>(null);
   const { toast } = useToast();
 
 
@@ -117,6 +128,24 @@ export default function HomePage() {
     }
   };
 
+  const handleExport = async () => {
+    if (!sceneRef.current) return;
+    setIsExporting(true);
+    try {
+      await sceneRef.current.handleExport('glb');
+    } catch (error) {
+      console.error("Export failed", error);
+      toast({
+        variant: "destructive",
+        title: "导出失败",
+        description: error instanceof Error ? error.message : "发生未知错误",
+      });
+    } finally {
+      setIsExporting(false);
+      setIsExportDialogOpen(false);
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (image) URL.revokeObjectURL(image);
@@ -157,7 +186,13 @@ export default function HomePage() {
             }}
           />
           <div className="relative z-10 h-full w-full">
-            <header className={cn("absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-end items-center transition-opacity", isSettingsOpen && "opacity-0 pointer-events-none")}>
+            <header className={cn("absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-between items-center transition-opacity", isSettingsOpen && "opacity-0 pointer-events-none")}>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setIsExportDialogOpen(true)} className="bg-background/20 hover:bg-muted/30 backdrop-blur-sm border-white/10">
+                        <Download className="mr-2 h-4 w-4" />
+                        导出
+                    </Button>
+                </div>
                 <Button variant="outline" onClick={handleReset} className="bg-background/20 hover:bg-muted/30 backdrop-blur-sm border-white/10">
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   返回
@@ -165,6 +200,7 @@ export default function HomePage() {
             </header>
             
             <DepthWeaverScene 
+              ref={sceneRef}
               key={key} 
               image={image} 
               depthMap={depthMap} 
@@ -182,6 +218,24 @@ export default function HomePage() {
               selectionRange={selectionRange}
               cameraType={cameraType}
             />
+
+            <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>导出3D模型</DialogTitle>
+                  <DialogDescription>
+                    此功能将把当前场景中的3D网格（包含顶点位移和纹理）导出为GLB文件。请注意，导出过程可能需要一些时间，因为它需要在CPU上重新计算所有顶点的位移。
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsExportDialogOpen(false)}>取消</Button>
+                  <Button onClick={handleExport} disabled={isExporting}>
+                    {isExporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isExporting ? '正在导出...' : '导出为GLB'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             <div className={cn("absolute bottom-6 right-6 z-20 transition-opacity", isSettingsOpen && "opacity-0 pointer-events-none")}>
                <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
@@ -409,3 +463,5 @@ export default function HomePage() {
     </main>
   );
 }
+
+    
