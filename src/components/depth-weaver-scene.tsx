@@ -223,7 +223,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
   useImperativeHandle(ref, () => ({
     async handleExport(format: 'glb') {
-      if (!meshRef.current || !rendererRef.current || !sceneRef.current || !cameraRef.current || format !== 'glb') {
+      if (!meshRef.current || !rendererRef.current || !sceneRef.current || !cameraRef.current || !bakedTextureRef.current || format !== 'glb') {
         throw new Error('Export is not ready or format is not supported.');
       }
     
@@ -232,19 +232,17 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       try {
         const exporter = new GLTFExporter();
         const originalMesh = meshRef.current;
+        const renderer = rendererRef.current;
             
         // 1. Re-run bake pass for export to ensure it's clean and correct
-        const tempRenderTarget = new THREE.WebGLRenderTarget(
-            bakedTextureRef.current!.width,
-            bakedTextureRef.current!.height,
-            {
-                minFilter: THREE.LinearFilter,
-                magFilter: THREE.LinearFilter,
-                format: THREE.RGBAFormat,
-                type: THREE.UnsignedByteType,
-                colorSpace: THREE.SRGBColorSpace,
-            }
-        );
+        const { width, height } = bakedTextureRef.current;
+        const tempRenderTarget = new THREE.WebGLRenderTarget(width, height, {
+          minFilter: THREE.LinearFilter,
+          magFilter: THREE.LinearFilter,
+          format: THREE.RGBAFormat,
+          type: THREE.UnsignedByteType,
+          colorSpace: THREE.SRGBColorSpace,
+        });
 
         const tempBakingMaterial = bakingMaterialRef.current!.clone();
         
@@ -252,9 +250,9 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         const bakingMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), tempBakingMaterial);
         bakingScene.add(bakingMesh);
 
-        rendererRef.current.setRenderTarget(tempRenderTarget);
-        rendererRef.current.render(bakingScene, new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1));
-        rendererRef.current.setRenderTarget(null);
+        renderer.setRenderTarget(tempRenderTarget);
+        renderer.render(bakingScene, new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1));
+        renderer.setRenderTarget(null);
 
         bakingMesh.geometry.dispose();
         bakingScene.remove(bakingMesh);
@@ -278,10 +276,30 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           const displacement = depth * depthMultiplier;
           positionAttribute.setZ(i, originalMesh.geometry.attributes.position.getZ(i) + displacement);
         }
+        
+        // 3. Convert RenderTarget to Canvas for exporter
+        const buffer = new Uint8Array(width * height * 4);
+        renderer.readRenderTargetPixels(tempRenderTarget, 0, 0, width, height, buffer);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
+        if (!context) {
+          throw new Error('Failed to get 2d context from canvas');
+        }
+        const imageData = new ImageData(new Uint8ClampedArray(buffer.buffer), width, height);
+        context.putImageData(imageData, 0, 0);
+
+        const canvasTexture = new THREE.CanvasTexture(canvas);
+        canvasTexture.colorSpace = THREE.SRGBColorSpace;
+        canvasTexture.needsUpdate = true;
+
+        tempRenderTarget.dispose();
     
-        // 3. Create export mesh with baked texture and export
+        // 4. Create export mesh with baked texture and export
         return new Promise<void>((resolve, reject) => {
-          const exportMaterial = new THREE.MeshBasicMaterial({ map: tempRenderTarget.texture });
+          const exportMaterial = new THREE.MeshBasicMaterial({ map: canvasTexture });
           const exportMesh = new THREE.Mesh(clonedGeometry, exportMaterial);
           exportMesh.scale.copy(originalMesh.scale);
     
@@ -295,12 +313,16 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
               a.download = `scene-${Date.now()}.glb`;
               a.click();
               URL.revokeObjectURL(url);
-              tempRenderTarget.dispose();
+              canvasTexture.dispose();
+              exportMaterial.dispose();
+              clonedGeometry.dispose();
               resolve();
             },
             (error) => {
               console.error('An error happened during parsing', error);
-              tempRenderTarget.dispose();
+              canvasTexture.dispose();
+              exportMaterial.dispose();
+              clonedGeometry.dispose();
               reject(new Error('Failed to export GLB.'));
             },
             { binary: true }
@@ -591,7 +613,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       if (meshRef.current) {
         meshRef.current.geometry?.dispose();
         liveMaterialRef.current?.dispose();
-        scene.remove(meshRef.current);
+        scene.remove(mesh.current);
       }
       meshRef.current = undefined;
       liveMaterialRef.current = undefined;
