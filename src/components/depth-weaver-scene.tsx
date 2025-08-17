@@ -613,7 +613,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       if (meshRef.current) {
         meshRef.current.geometry?.dispose();
         liveMaterialRef.current?.dispose();
-        scene.remove(mesh.current);
+        scene.remove(meshRef.current);
       }
       meshRef.current = undefined;
       liveMaterialRef.current = undefined;
