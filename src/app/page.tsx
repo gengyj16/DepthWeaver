@@ -240,12 +240,11 @@ export default function HomePage() {
                             </div>
                           )}
                       </div>
-
-                       <div className="space-y-4 rounded-lg p-3 bg-muted/50">
+                      
+                      <div className="space-y-4 rounded-lg p-3 bg-muted/50">
                         <Label className="font-semibold">相机设置</Label>
                         <div className="flex flex-col gap-2">
-                          <Label className="text-center">相机类型</Label>
-                          <RadioGroup value={cameraType} onValueChange={(value: CameraType) => setCameraType(value)} className="grid grid-cols-2 gap-2">
+                          <RadioGroup value={cameraType} onValueChange={(value) => setCameraType(value as CameraType)} className="grid grid-cols-2 gap-2">
                             <div>
                               <RadioGroupItem value="perspective" id="cam-perspective" className="peer sr-only" />
                               <Label htmlFor="cam-perspective" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
