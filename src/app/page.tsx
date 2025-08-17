@@ -164,7 +164,7 @@ export default function HomePage() {
                     <Settings className="h-6 w-6" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent className="w-full sm:w-[400px] bg-background/80 backdrop-blur-sm border-l-border/50" overlayClassName="bg-transparent">
+                <SheetContent className="w-full sm:w-[400px] bg-background/30 border-l-border/50" overlayClassName="bg-transparent">
                   <SheetHeader>
                     <SheetTitle className="text-xl">控制面板</SheetTitle>
                   </SheetHeader>
