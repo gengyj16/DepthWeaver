@@ -23,6 +23,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -57,6 +65,7 @@ export default function HomePage() {
   const [cameraType, setCameraType] = useState<CameraType>('perspective');
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isFillWarningOpen, setIsFillWarningOpen] = useState(false);
   const sceneRef = useRef<DepthWeaverSceneHandle>(null);
   const { toast } = useToast();
 
@@ -157,10 +166,7 @@ export default function HomePage() {
     const newMode = value as RenderMode;
     setRenderMode(newMode);
     if (newMode === 'fill') {
-      toast({
-        title: "功能开发中",
-        description: "暂时做留空处理，未进行背景填充",
-      });
+      setIsFillWarningOpen(true);
     }
   };
 
@@ -231,14 +237,26 @@ export default function HomePage() {
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsExportDialogOpen(false)}>取消</Button>
-                  <Button onClick={handleExport} disabled={isExporting}>
+                  <Button onClick={handleExport} disabled={isExporting} className="w-full">
                     {isExporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     {isExporting ? '正在导出...' : '导出为GLB'}
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+
+             <AlertDialog open={isFillWarningOpen} onOpenChange={setIsFillWarningOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>功能开发中</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    背景填充功能仍在开发中，暂时作为留空处理。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogAction onClick={() => setIsFillWarningOpen(false)}>知道了</AlertDialogAction>
+              </AlertDialogContent>
+            </AlertDialog>
+
 
             <div className={cn("absolute bottom-6 right-6 z-20 transition-opacity", isSettingsOpen && "opacity-0 pointer-events-none")}>
                <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
@@ -247,11 +265,11 @@ export default function HomePage() {
                     <Settings className="h-6 w-6" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent className="w-full sm:w-[400px] bg-background/30 border-l-border/50" overlayClassName="bg-transparent">
+                <SheetContent className="w-full sm:w-[400px] bg-background/30 border-l-border/50 flex flex-col" overlayClassName="bg-transparent">
                   <SheetHeader>
                     <SheetTitle className="text-xl">控制面板</SheetTitle>
                   </SheetHeader>
-                  <ScrollArea className="h-[calc(100%-4rem)] pr-6 -mr-6">
+                  <ScrollArea className="flex-1 pr-6 -mr-6">
                     <div className="py-6 space-y-6">
                       <div className="flex items-center justify-between rounded-lg p-3 bg-muted/50">
                         <Label htmlFor="sensor-mode" className="font-semibold">
@@ -413,6 +431,7 @@ export default function HomePage() {
                               </div>
                             </RadioGroup>
                         </div>
+                        <div className="h-[52px]">
                          {backgroundMode === 'solid' && (
                           <div className="flex items-center gap-4 rounded-lg p-3 bg-background/30">
                             <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
@@ -425,6 +444,7 @@ export default function HomePage() {
                             />
                           </div>
                         )}
+                        </div>
                         <div className="flex flex-col gap-2">
                           <Label className="text-center">网格细节</Label>
                           <RadioGroup 
