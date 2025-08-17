@@ -248,9 +248,23 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         const bakingMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), tempBakingMaterial);
         bakingScene.add(bakingMesh);
 
+        // --- Start of Chroma Key Change ---
+        const originalClearColor = new THREE.Color();
+        renderer.getClearColor(originalClearColor);
+        const originalClearAlpha = renderer.getClearAlpha();
+        
+        renderer.setClearColor('#00ff00'); // Set to green
+        renderer.setClearAlpha(1);
+        
         renderer.setRenderTarget(tempRenderTarget);
+        renderer.clear();
         renderer.render(bakingScene, new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1));
         renderer.setRenderTarget(null);
+
+        // Restore original clear color
+        renderer.setClearColor(originalClearColor);
+        renderer.setClearAlpha(originalClearAlpha);
+        // --- End of Chroma Key Change ---
 
         bakingMesh.geometry.dispose();
         bakingScene.remove(bakingMesh);
@@ -273,6 +287,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           const displacement = depth * depthMultiplier;
           positionAttribute.setZ(i, originalMesh.geometry.attributes.position.getZ(i) + displacement);
         }
+        clonedGeometry.computeVertexNormals();
         
         const buffer = new Uint8Array(width * height * 4);
         renderer.readRenderTargetPixels(tempRenderTarget, 0, 0, width, height, buffer);
@@ -642,3 +657,4 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 DepthWeaverScene.displayName = 'DepthWeaverScene';
 
     
+
