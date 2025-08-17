@@ -31,6 +31,7 @@ export default function HomePage() {
   const [key, setKey] = useState(Date.now());
   const [depthMultiplier, setDepthMultiplier] = useState(0.7);
   const [cameraDistance, setCameraDistance] = useState(2);
+  const [orthographicZoom, setOrthographicZoom] = useState(1);
   const [meshDetail, setMeshDetail] = useState(1024);
   const [blurIntensity, setBlurIntensity] = useState(1.0);
   const [viewAngleLimit, setViewAngleLimit] = useState(10);
@@ -155,6 +156,7 @@ export default function HomePage() {
               depthMap={depthMap} 
               depthMultiplier={depthMultiplier} 
               cameraDistance={cameraDistance} 
+              orthographicZoom={orthographicZoom}
               meshDetail={meshDetail} 
               blurIntensity={blurIntensity} 
               viewAngleLimit={viewAngleLimit}
@@ -280,6 +282,19 @@ export default function HomePage() {
                                 step={0.01}
                                 value={[cameraDistance]}
                                 onValueChange={(value) => setCameraDistance(value[0])}
+                                />
+                            </div>
+                        )}
+                        {cameraType === 'orthographic' && (
+                            <div className="flex flex-col gap-2">
+                                <Label htmlFor="ortho-zoom-slider" className="text-center">缩放: {orthographicZoom.toFixed(2)}</Label>
+                                <Slider
+                                id="ortho-zoom-slider"
+                                min={0.1}
+                                max={5}
+                                step={0.01}
+                                value={[orthographicZoom]}
+                                onValueChange={(value) => setOrthographicZoom(value[0])}
                                 />
                             </div>
                         )}

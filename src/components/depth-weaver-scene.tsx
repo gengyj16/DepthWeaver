@@ -12,6 +12,7 @@ interface DepthWeaverSceneProps {
   depthMap: string;
   depthMultiplier: number;
   cameraDistance: number;
+  orthographicZoom: number;
   meshDetail: number;
   blurIntensity: number;
   viewAngleLimit: number;
@@ -28,6 +29,7 @@ export function DepthWeaverScene({
   depthMap, 
   depthMultiplier, 
   cameraDistance, 
+  orthographicZoom,
   meshDetail, 
   blurIntensity, 
   viewAngleLimit, 
@@ -59,10 +61,17 @@ export function DepthWeaverScene({
   }, [depthMultiplier]);
   
   useEffect(() => {
-    if (cameraRef.current) {
-        cameraRef.current.position.z = cameraDistance;
+    if (cameraRef.current && cameraRef.current.type === 'PerspectiveCamera') {
+        (cameraRef.current as THREE.PerspectiveCamera).position.z = cameraDistance;
     }
   }, [cameraDistance]);
+
+  useEffect(() => {
+    if (cameraRef.current && cameraRef.current.type === 'OrthographicCamera') {
+        (cameraRef.current as THREE.OrthographicCamera).zoom = orthographicZoom;
+        cameraRef.current.updateProjectionMatrix();
+    }
+  }, [orthographicZoom]);
 
   useEffect(() => {
     if (materialRef.current) {
@@ -204,11 +213,15 @@ export function DepthWeaverScene({
 
     if (cameraType === 'perspective') {
         camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 100);
+        camera.position.z = cameraDistance;
     } else {
         const frustumSize = 2;
         camera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 0.1, 100);
+        camera.zoom = orthographicZoom;
+        camera.position.z = 2; // Position doesn't affect size, but needs to be outside the mesh
+        camera.updateProjectionMatrix();
     }
-    camera.position.z = cameraDistance;
+    
     cameraRef.current = camera;
 
 
