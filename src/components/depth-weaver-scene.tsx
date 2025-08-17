@@ -296,36 +296,7 @@ export function DepthWeaverScene({
               }
               gl_FragColor = blurredColor / totalWeight;
             } else { // Fill Mode
-                vec2 grad_dir = normalize(vec2(dx, dy));
-                
-                // Determine direction to sample from (towards background)
-                float currentDepth = getDepth(vUv);
-                float neighborDepth = getDepth(vUv - grad_dir * pixelSizeX);
-                if(neighborDepth > currentDepth){
-                    grad_dir = -grad_dir;
-                }
-
-                vec4 avg_color = vec4(0.0);
-                float total_weight = 0.0;
-                
-                for(int i = 1; i <= uSelectionRange; ++i) {
-                    vec2 sample_uv = vUv - grad_dir * float(i) * pixelSizeX * 2.0;
-                    
-                    // Check if sample is within a reasonable depth range
-                    float sample_depth = getDepth(sample_uv);
-                    if(abs(sample_depth - currentDepth) < 0.1) {
-                        float weight = 1.0 / float(i);
-                        avg_color += texture2D(uTexture, sample_uv) * weight;
-                        total_weight += weight;
-                    }
-                }
-                
-                if (total_weight > 0.0) {
-                    gl_FragColor = avg_color / total_weight;
-                } else {
-                    // Fallback to original color if no suitable sample is found
-                    gl_FragColor = texture2D(uTexture, vUv);
-                }
+              discard;
             }
           } else {
             gl_FragColor = texture2D(uTexture, vUv);
