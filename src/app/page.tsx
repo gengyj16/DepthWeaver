@@ -21,6 +21,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import { useToast } from '@/hooks/use-toast';
 
 type RenderMode = 'blur' | 'fill';
 type CameraType = 'perspective' | 'orthographic';
@@ -45,6 +46,7 @@ export default function HomePage() {
   const [renderMode, setRenderMode] = useState<RenderMode>('blur');
   const [selectionRange, setSelectionRange] = useState(10);
   const [cameraType, setCameraType] = useState<CameraType>('perspective');
+  const { toast } = useToast();
 
 
   useEffect(() => {
@@ -120,6 +122,17 @@ export default function HomePage() {
       if (depthMap) URL.revokeObjectURL(depthMap);
     };
   }, [image, depthMap]);
+  
+  const handleRenderModeChange = (value: string) => {
+    const newMode = value as RenderMode;
+    setRenderMode(newMode);
+    if (newMode === 'fill') {
+      toast({
+        title: "功能开发中",
+        description: "暂时做留空处理，未进行背景填充",
+      });
+    }
+  };
 
   const isSceneVisible = image && depthMap;
 
@@ -196,7 +209,7 @@ export default function HomePage() {
                       
                       <div className="space-y-4 rounded-lg p-3 bg-muted/50">
                         <Label className="font-semibold">渲染模式</Label>
-                         <RadioGroup value={renderMode} onValueChange={(value) => setRenderMode(value as RenderMode)} className="grid grid-cols-2 gap-2">
+                         <RadioGroup value={renderMode} onValueChange={handleRenderModeChange} className="grid grid-cols-2 gap-2">
                             <div>
                               <RadioGroupItem value="blur" id="mode-blur" className="peer sr-only" />
                               <Label htmlFor="mode-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
