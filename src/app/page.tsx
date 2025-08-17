@@ -37,6 +37,7 @@ export default function HomePage() {
   const [backgroundMode, setBackgroundMode] = useState<'blur' | 'solid'>('blur');
   const [backgroundColor, setBackgroundColor] = useState('#000000');
   const [containerHeight, setContainerHeight] = useState<string | number>('100vh');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
 
   useEffect(() => {
@@ -136,7 +137,7 @@ export default function HomePage() {
             }}
           />
           <div className="relative z-10 h-full w-full">
-            <header className="absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-end items-center">
+            <header className={cn("absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-end items-center transition-opacity", isSettingsOpen && "opacity-0 pointer-events-none")}>
                 <Button variant="outline" onClick={handleReset} className="bg-background/20 hover:bg-muted/30 backdrop-blur-sm border-white/10">
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   返回
@@ -157,8 +158,8 @@ export default function HomePage() {
               backgroundColor={backgroundMode === 'solid' ? backgroundColor : 'transparent'}
             />
 
-            <div className="absolute bottom-6 right-6 z-20">
-               <Sheet>
+            <div className={cn("absolute bottom-6 right-6 z-20 transition-opacity", isSettingsOpen && "opacity-0 pointer-events-none")}>
+               <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" size="icon" className="rounded-full h-12 w-12 bg-background/20 hover:bg-muted/30 backdrop-blur-sm shadow-lg border-white/10">
                     <Settings className="h-6 w-6" />
