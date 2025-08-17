@@ -22,6 +22,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
+type RenderMode = 'blur' | 'fill';
+
 export default function HomePage() {
   const [image, setImage] = useState<string | null>(null);
   const [depthMap, setDepthMap] = useState<string | null>(null);
@@ -38,6 +40,8 @@ export default function HomePage() {
   const [backgroundColor, setBackgroundColor] = useState('#000000');
   const [containerHeight, setContainerHeight] = useState<string | number>('100vh');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [renderMode, setRenderMode] = useState<RenderMode>('blur');
+  const [selectionRange, setSelectionRange] = useState(10);
 
 
   useEffect(() => {
@@ -183,37 +187,56 @@ export default function HomePage() {
                         />
                       </div>
                       {!sensorSupported && <p className="text-xs text-center text-destructive">您的设备不支持方向传感器。</p>}
-
-                      <div className="flex flex-col gap-2">
-                        <Label className="text-center">背景</Label>
-                          <RadioGroup value={backgroundMode} onValueChange={(value: 'blur' | 'solid') => setBackgroundMode(value)} className="grid grid-cols-2 gap-2">
+                      
+                      <div className="space-y-4 rounded-lg p-3 bg-muted/50">
+                        <Label className="font-semibold">渲染模式</Label>
+                         <RadioGroup value={renderMode} onValueChange={(value: RenderMode) => setRenderMode(value)} className="grid grid-cols-2 gap-2">
                             <div>
-                              <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" />
-                              <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-muted/50 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
-                                模糊背景
+                              <RadioGroupItem value="blur" id="mode-blur" className="peer sr-only" />
+                              <Label htmlFor="mode-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                边界模糊
                               </Label>
                             </div>
                             <div>
-                              <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" />
-                              <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-muted/50 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
-                                纯色
+                              <RadioGroupItem value="fill" id="mode-fill" className="peer sr-only" />
+                              <Label htmlFor="mode-fill" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                背景填充(beta)
                               </Label>
                             </div>
                           </RadioGroup>
+                          {renderMode === 'blur' ? (
+                            <div className="space-y-4">
+                               <p className="text-xs text-muted-foreground">对于深度变化较大处，为缓解像素拉伸带来的撕裂感，将拉伸的像素进行模糊处理</p>
+                               <div className="flex flex-col gap-2">
+                                <Label htmlFor="blur-slider" className="text-center">模糊强度: {blurIntensity.toFixed(2)}</Label>
+                                <Slider
+                                  id="blur-slider"
+                                  min={0}
+                                  max={5}
+                                  step={0.1}
+                                  value={[blurIntensity]}
+                                  onValueChange={(value) => setBlurIntensity(value[0])}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                             <div className="space-y-4">
+                                <p className="text-xs text-muted-foreground">从较远处的像素选取颜色，填充背景中原本被遮住的部分</p>
+                                <div className="flex flex-col gap-2">
+                                <Label htmlFor="selection-range-slider" className="text-center">选区范围: {selectionRange}</Label>
+                                <Slider
+                                  id="selection-range-slider"
+                                  min={1}
+                                  max={20}
+                                  step={1}
+                                  value={[selectionRange]}
+                                  onValueChange={(value) => setSelectionRange(value[0])}
+                                />
+                              </div>
+                            </div>
+                          )}
                       </div>
 
-                      {backgroundMode === 'solid' && (
-                        <div className="flex items-center gap-4 rounded-lg p-3 bg-muted/50">
-                          <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
-                          <input 
-                            id="bg-color-picker"
-                            type="color" 
-                            value={backgroundColor} 
-                            onChange={(e) => setBackgroundColor(e.target.value)}
-                            className="w-24 h-8 p-0 bg-transparent border-none cursor-pointer"
-                          />
-                        </div>
-                      )}
 
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
@@ -238,28 +261,6 @@ export default function HomePage() {
                         />
                       </div>
                       <div className="flex flex-col gap-2">
-                        <Label htmlFor="mesh-detail-slider" className="text-center">网格细节: {meshDetail}</Label>
-                        <Slider
-                          id="mesh-detail-slider"
-                          min={256}
-                          max={2048}
-                          step={256}
-                          value={[meshDetail]}
-                          onValueChange={(value) => setMeshDetail(value[0])}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="blur-slider" className="text-center">模糊强度: {blurIntensity.toFixed(2)}</Label>
-                        <Slider
-                          id="blur-slider"
-                          min={0}
-                          max={5}
-                          step={0.1}
-                          value={[blurIntensity]}
-                          onValueChange={(value) => setBlurIntensity(value[0])}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
                         <Label htmlFor="angle-limit-slider" className="text-center">视角限制: {viewAngleLimit}°</Label>
                         <Slider
                           id="angle-limit-slider"
@@ -270,6 +271,57 @@ export default function HomePage() {
                           onValueChange={(value) => setViewAngleLimit(value[0])}
                         />
                       </div>
+
+                      <div className="space-y-4 rounded-lg p-3 bg-muted/50">
+                        <Label className="font-semibold">高级设置</Label>
+                         <div className="flex flex-col gap-2">
+                          <Label className="text-center">背景</Label>
+                            <RadioGroup value={backgroundMode} onValueChange={(value: 'blur' | 'solid') => setBackgroundMode(value)} className="grid grid-cols-2 gap-2">
+                              <div>
+                                <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" />
+                                <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                  模糊背景
+                                </Label>
+                              </div>
+                              <div>
+                                <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" />
+                                <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                  纯色
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                        </div>
+                         {backgroundMode === 'solid' && (
+                          <div className="flex items-center gap-4 rounded-lg p-3 bg-background/30">
+                            <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
+                            <input 
+                              id="bg-color-picker"
+                              type="color" 
+                              value={backgroundColor} 
+                              onChange={(e) => setBackgroundColor(e.target.value)}
+                              className="w-24 h-8 p-0 bg-transparent border-none cursor-pointer"
+                            />
+                          </div>
+                        )}
+                        <div className="flex flex-col gap-2">
+                          <Label className="text-center">网格细节</Label>
+                          <RadioGroup 
+                            value={String(meshDetail)} 
+                            onValueChange={(value) => setMeshDetail(Number(value))} 
+                            className="grid grid-cols-3 gap-2"
+                          >
+                            {[512, 1024, 2048].map(detail => (
+                              <div key={detail}>
+                                <RadioGroupItem value={String(detail)} id={`mesh-${detail}`} className="peer sr-only" />
+                                <Label htmlFor={`mesh-${detail}`} className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                  {detail}
+                                </Label>
+                              </div>
+                            ))}
+                          </RadioGroup>
+                        </div>
+                      </div>
+
                     </div>
                   </ScrollArea>
                 </SheetContent>
