@@ -4,6 +4,8 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
+type RenderMode = 'blur' | 'fill';
+
 interface DepthWeaverSceneProps {
   image: string;
   depthMap: string;
@@ -15,6 +17,8 @@ interface DepthWeaverSceneProps {
   useSensor: boolean;
   backgroundMode: 'blur' | 'solid';
   backgroundColor: string;
+  renderMode: RenderMode;
+  selectionRange: number;
 }
 
 export function DepthWeaverScene({ 
@@ -27,7 +31,9 @@ export function DepthWeaverScene({
   viewAngleLimit, 
   useSensor,
   backgroundMode,
-  backgroundColor
+  backgroundColor,
+  renderMode,
+  selectionRange,
 }: DepthWeaverSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +66,18 @@ export function DepthWeaverScene({
         materialRef.current.uniforms.uBlurIntensity.value = blurIntensity;
     }
   }, [blurIntensity]);
+  
+  useEffect(() => {
+    if (materialRef.current) {
+      materialRef.current.uniforms.uRenderMode.value = renderMode === 'fill' ? 1 : 0;
+    }
+  }, [renderMode]);
+
+  useEffect(() => {
+    if (materialRef.current) {
+      materialRef.current.uniforms.uSelectionRange.value = selectionRange;
+    }
+  }, [selectionRange]);
 
   useEffect(() => {
     maxAngleRef.current = THREE.MathUtils.degToRad(viewAngleLimit);
@@ -212,7 +230,9 @@ export function DepthWeaverScene({
         uDepthMap: { value: depthTexture },
         uDepthMultiplier: { value: depthMultiplier },
         uBlurIntensity: { value: blurIntensity },
-        uResolution: { value: new THREE.Vector2(currentMount.clientWidth, currentMount.clientHeight) }
+        uResolution: { value: new THREE.Vector2(currentMount.clientWidth, currentMount.clientHeight) },
+        uRenderMode: { value: renderMode === 'fill' ? 1 : 0 },
+        uSelectionRange: { value: selectionRange }
       },
       vertexShader: `
         uniform sampler2D uDepthMap;
@@ -233,6 +253,9 @@ export function DepthWeaverScene({
         uniform sampler2D uDepthMap;
         uniform float uBlurIntensity;
         uniform vec2 uResolution;
+        uniform int uRenderMode;
+        uniform int uSelectionRange;
+
         varying vec2 vUv;
 
         float getDepth(vec2 uv) {
@@ -249,28 +272,61 @@ export function DepthWeaverScene({
           float depthE = getDepth(vUv + vec2(pixelSizeX, 0.0));
           float depthW = getDepth(vUv - vec2(pixelSizeX, 0.0));
 
-          float dx = abs(depthE - depthW);
-          float dy = abs(depthN - depthS);
-          float gradient = smoothstep(0.0, 0.05, max(dx, dy));
+          float dx = depthE - depthW;
+          float dy = depthN - depthS;
+          float gradient = smoothstep(0.0, 0.05, sqrt(dx*dx + dy*dy));
 
-          if (gradient > 0.1 && uBlurIntensity > 0.0) {
-            vec4 blurredColor = vec4(0.0);
-            float totalWeight = 0.0;
-            float blurStrength = gradient * uBlurIntensity;
+          if (gradient > 0.1) {
+            if (uRenderMode == 0) { // Blur Mode
+              vec4 blurredColor = vec4(0.0);
+              float totalWeight = 0.0;
+              float blurStrength = gradient * uBlurIntensity;
 
-            for (int x = -4; x <= 4; x++) {
-              for (int y = -4; y <= 4; y++) {
-                float offsetX = float(x) * pixelSizeX * blurStrength;
-                float offsetY = float(y) * pixelSizeY * blurStrength;
-                vec2 sampleUV = vUv + vec2(offsetX, offsetY);
-                
-                float weight = exp(-(float(x*x + y*y) / (2.0 * 16.0)));
-                
-                blurredColor += texture2D(uTexture, sampleUV) * weight;
-                totalWeight += weight;
+              for (int x = -4; x <= 4; x++) {
+                for (int y = -4; y <= 4; y++) {
+                  float offsetX = float(x) * pixelSizeX * blurStrength;
+                  float offsetY = float(y) * pixelSizeY * blurStrength;
+                  vec2 sampleUV = vUv + vec2(offsetX, offsetY);
+                  
+                  float weight = exp(-(float(x*x + y*y) / (2.0 * 16.0)));
+                  
+                  blurredColor += texture2D(uTexture, sampleUV) * weight;
+                  totalWeight += weight;
+                }
               }
+              gl_FragColor = blurredColor / totalWeight;
+            } else { // Fill Mode
+                vec2 grad_dir = normalize(vec2(dx, dy));
+                
+                // Determine direction to sample from (towards background)
+                float currentDepth = getDepth(vUv);
+                float neighborDepth = getDepth(vUv - grad_dir * pixelSizeX);
+                if(neighborDepth > currentDepth){
+                    grad_dir = -grad_dir;
+                }
+
+                vec4 avg_color = vec4(0.0);
+                float total_weight = 0.0;
+                
+                for(int i = 1; i <= uSelectionRange; ++i) {
+                    vec2 sample_uv = vUv - grad_dir * float(i) * pixelSizeX * 2.0;
+                    
+                    // Check if sample is within a reasonable depth range
+                    float sample_depth = getDepth(sample_uv);
+                    if(abs(sample_depth - currentDepth) < 0.1) {
+                        float weight = 1.0 / float(i);
+                        avg_color += texture2D(uTexture, sample_uv) * weight;
+                        total_weight += weight;
+                    }
+                }
+                
+                if (total_weight > 0.0) {
+                    gl_FragColor = avg_color / total_weight;
+                } else {
+                    // Fallback to original color if no suitable sample is found
+                    gl_FragColor = texture2D(uTexture, vUv);
+                }
             }
-            gl_FragColor = blurredColor / totalWeight;
           } else {
             gl_FragColor = texture2D(uTexture, vUv);
           }

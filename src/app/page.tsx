@@ -21,15 +21,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 
 type RenderMode = 'blur' | 'fill';
 
@@ -51,7 +42,6 @@ export default function HomePage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [renderMode, setRenderMode] = useState<RenderMode>('blur');
   const [selectionRange, setSelectionRange] = useState(10);
-  const [showFillModeAlert, setShowFillModeAlert] = useState(false);
 
 
   useEffect(() => {
@@ -121,15 +111,6 @@ export default function HomePage() {
     }
   };
 
-  const handleRenderModeChange = (value: RenderMode) => {
-    if (value === 'fill') {
-      setShowFillModeAlert(true);
-    } else {
-      setRenderMode(value);
-    }
-  };
-
-
   useEffect(() => {
     return () => {
       if (image) URL.revokeObjectURL(image);
@@ -178,6 +159,8 @@ export default function HomePage() {
               useSensor={useSensor}
               backgroundMode={backgroundMode}
               backgroundColor={backgroundMode === 'solid' ? backgroundColor : 'transparent'}
+              renderMode={renderMode}
+              selectionRange={selectionRange}
             />
 
             <div className={cn("absolute bottom-6 right-6 z-20 transition-opacity", isSettingsOpen && "opacity-0 pointer-events-none")}>
@@ -208,7 +191,7 @@ export default function HomePage() {
                       
                       <div className="space-y-4 rounded-lg p-3 bg-muted/50">
                         <Label className="font-semibold">渲染模式</Label>
-                         <RadioGroup value={renderMode} onValueChange={handleRenderModeChange} className="grid grid-cols-2 gap-2">
+                         <RadioGroup value={renderMode} onValueChange={(value) => setRenderMode(value as RenderMode)} className="grid grid-cols-2 gap-2">
                             <div>
                               <RadioGroupItem value="blur" id="mode-blur" className="peer sr-only" />
                               <Label htmlFor="mode-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
@@ -359,19 +342,6 @@ export default function HomePage() {
             )}
         </div>
       )}
-      <AlertDialog open={showFillModeAlert} onOpenChange={setShowFillModeAlert}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>功能开发中</AlertDialogTitle>
-            <AlertDialogDescription>
-              “背景填充”功能仍在开发中，暂未生效，敬请期待！
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setShowFillModeAlert(false)}>确认</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </main>
   );
 }
