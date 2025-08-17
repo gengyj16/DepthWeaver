@@ -35,7 +35,7 @@ export default function HomePage() {
   const [orthographicZoom, setOrthographicZoom] = useState(1);
   const [meshDetail, setMeshDetail] = useState(1024);
   const [blurIntensity, setBlurIntensity] = useState(1.0);
-  const [blurOffset, setBlurOffset] = useState(0);
+  const [blurOffset, setBlurOffset] = useState(1);
   const [viewAngleLimit, setViewAngleLimit] = useState(10);
   const [useSensor, setUseSensor] = useState(false);
   const [sensorSupported, setSensorSupported] = useState(true);
@@ -233,7 +233,7 @@ export default function HomePage() {
                                 <Slider
                                   id="blur-slider"
                                   min={0}
-                                  max={5}
+                                  max={10}
                                   step={0.1}
                                   value={[blurIntensity]}
                                   onValueChange={(value) => setBlurIntensity(value[0])}
