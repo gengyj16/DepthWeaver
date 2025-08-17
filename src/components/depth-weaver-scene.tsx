@@ -15,6 +15,7 @@ interface DepthWeaverSceneProps {
   orthographicZoom: number;
   meshDetail: number;
   blurIntensity: number;
+  blurOffset: number;
   viewAngleLimit: number;
   useSensor: boolean;
   backgroundMode: 'blur' | 'solid';
@@ -32,6 +33,7 @@ export function DepthWeaverScene({
   orthographicZoom,
   meshDetail, 
   blurIntensity, 
+  blurOffset,
   viewAngleLimit, 
   useSensor,
   backgroundMode,
@@ -78,6 +80,12 @@ export function DepthWeaverScene({
         materialRef.current.uniforms.uBlurIntensity.value = blurIntensity;
     }
   }, [blurIntensity]);
+  
+  useEffect(() => {
+    if (materialRef.current) {
+      materialRef.current.uniforms.uBlurOffset.value = blurOffset;
+    }
+  }, [blurOffset]);
   
   useEffect(() => {
     if (materialRef.current) {
@@ -255,6 +263,7 @@ export function DepthWeaverScene({
         uDepthMap: { value: depthTexture },
         uDepthMultiplier: { value: depthMultiplier },
         uBlurIntensity: { value: blurIntensity },
+        uBlurOffset: { value: blurOffset },
         uResolution: { value: new THREE.Vector2(currentMount.clientWidth, currentMount.clientHeight) },
         uRenderMode: { value: renderMode === 'fill' ? 1 : 0 },
         uSelectionRange: { value: selectionRange }
@@ -277,6 +286,7 @@ export function DepthWeaverScene({
         uniform sampler2D uTexture;
         uniform sampler2D uDepthMap;
         uniform float uBlurIntensity;
+        uniform float uBlurOffset;
         uniform vec2 uResolution;
         uniform int uRenderMode;
         uniform int uSelectionRange;
@@ -306,6 +316,7 @@ export function DepthWeaverScene({
               vec4 blurredColor = vec4(0.0);
               float totalWeight = 0.0;
               float blurStrength = gradient * uBlurIntensity;
+              float centerDepth = getDepth(vUv);
 
               for (int x = -4; x <= 4; x++) {
                 for (int y = -4; y <= 4; y++) {
@@ -313,13 +324,31 @@ export function DepthWeaverScene({
                   float offsetY = float(y) * pixelSizeY * blurStrength;
                   vec2 sampleUV = vUv + vec2(offsetX, offsetY);
                   
+                  float sampleDepth = getDepth(sampleUV);
+                  float depthDiff = sampleDepth - centerDepth;
+
+                  // Weight based on offset from center (for gaussian blur)
                   float weight = exp(-(float(x*x + y*y) / (2.0 * 16.0)));
-                  
+
+                  // Adjust weight based on depth difference and blur offset
+                  // uBlurOffset = -1: Only use foreground (depth < centerDepth)
+                  // uBlurOffset =  1: Only use background (depth > centerDepth)
+                  // uBlurOffset =  0: Use both
+                  float depthWeight = 1.0 - (uBlurOffset * sign(depthDiff));
+                  weight *= clamp(depthWeight, 0.0, 1.0);
+
                   blurredColor += texture2D(uTexture, sampleUV) * weight;
                   totalWeight += weight;
                 }
               }
-              gl_FragColor = blurredColor / totalWeight;
+
+              if (totalWeight > 0.0) {
+                gl_FragColor = blurredColor / totalWeight;
+              } else {
+                // Fallback to original color if no pixels were weighted
+                gl_FragColor = texture2D(uTexture, vUv);
+              }
+
             } else { // Fill Mode
               discard;
             }

@@ -35,6 +35,7 @@ export default function HomePage() {
   const [orthographicZoom, setOrthographicZoom] = useState(1);
   const [meshDetail, setMeshDetail] = useState(1024);
   const [blurIntensity, setBlurIntensity] = useState(1.0);
+  const [blurOffset, setBlurOffset] = useState(0);
   const [viewAngleLimit, setViewAngleLimit] = useState(10);
   const [useSensor, setUseSensor] = useState(false);
   const [sensorSupported, setSensorSupported] = useState(true);
@@ -172,6 +173,7 @@ export default function HomePage() {
               orthographicZoom={orthographicZoom}
               meshDetail={meshDetail} 
               blurIntensity={blurIntensity} 
+              blurOffset={blurOffset}
               viewAngleLimit={viewAngleLimit}
               useSensor={useSensor}
               backgroundMode={backgroundMode}
@@ -235,6 +237,17 @@ export default function HomePage() {
                                   step={0.1}
                                   value={[blurIntensity]}
                                   onValueChange={(value) => setBlurIntensity(value[0])}
+                                />
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <Label htmlFor="blur-offset-slider" className="text-center">取样偏移: {blurOffset.toFixed(2)}</Label>
+                                <Slider
+                                  id="blur-offset-slider"
+                                  min={-1}
+                                  max={1}
+                                  step={0.1}
+                                  value={[blurOffset]}
+                                  onValueChange={(value) => setBlurOffset(value[0])}
                                 />
                               </div>
                             </div>
