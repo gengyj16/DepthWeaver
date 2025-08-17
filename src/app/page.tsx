@@ -241,39 +241,60 @@ export default function HomePage() {
                           )}
                       </div>
 
-
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
-                        <Slider 
-                          id="depth-slider"
-                          min={0}
-                          max={5}
-                          step={0.01}
-                          value={[depthMultiplier]}
-                          onValueChange={(value) => setDepthMultiplier(value[0])}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="zoom-slider" className="text-center">距离: {cameraDistance.toFixed(2)}</Label>
-                        <Slider
-                          id="zoom-slider"
-                          min={0.5}
-                          max={5}
-                          step={0.01}
-                          value={[cameraDistance]}
-                          onValueChange={(value) => setCameraDistance(value[0])}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="angle-limit-slider" className="text-center">视角限制: {viewAngleLimit}°</Label>
-                        <Slider
-                          id="angle-limit-slider"
-                          min={0}
-                          max={90}
-                          step={1}
-                          value={[viewAngleLimit]}
-                          onValueChange={(value) => setViewAngleLimit(value[0])}
-                        />
+                       <div className="space-y-4 rounded-lg p-3 bg-muted/50">
+                        <Label className="font-semibold">相机设置</Label>
+                        <div className="flex flex-col gap-2">
+                          <Label className="text-center">相机类型</Label>
+                          <RadioGroup value={cameraType} onValueChange={(value: CameraType) => setCameraType(value)} className="grid grid-cols-2 gap-2">
+                            <div>
+                              <RadioGroupItem value="perspective" id="cam-perspective" className="peer sr-only" />
+                              <Label htmlFor="cam-perspective" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                透视相机
+                              </Label>
+                            </div>
+                            <div>
+                              <RadioGroupItem value="orthographic" id="cam-orthographic" className="peer sr-only" />
+                              <Label htmlFor="cam-orthographic" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                正交相机
+                              </Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
+                          <Slider 
+                            id="depth-slider"
+                            min={0}
+                            max={5}
+                            step={0.01}
+                            value={[depthMultiplier]}
+                            onValueChange={(value) => setDepthMultiplier(value[0])}
+                          />
+                        </div>
+                        {cameraType === 'perspective' && (
+                            <div className="flex flex-col gap-2">
+                                <Label htmlFor="zoom-slider" className="text-center">距离: {cameraDistance.toFixed(2)}</Label>
+                                <Slider
+                                id="zoom-slider"
+                                min={0.5}
+                                max={5}
+                                step={0.01}
+                                value={[cameraDistance]}
+                                onValueChange={(value) => setCameraDistance(value[0])}
+                                />
+                            </div>
+                        )}
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="angle-limit-slider" className="text-center">视角限制: {viewAngleLimit}°</Label>
+                          <Slider
+                            id="angle-limit-slider"
+                            min={0}
+                            max={90}
+                            step={1}
+                            value={[viewAngleLimit]}
+                            onValueChange={(value) => setViewAngleLimit(value[0])}
+                          />
+                        </div>
                       </div>
 
                       <div className="space-y-4 rounded-lg p-3 bg-muted/50">
@@ -307,23 +328,6 @@ export default function HomePage() {
                             />
                           </div>
                         )}
-                        <div className="flex flex-col gap-2">
-                            <Label className="text-center">相机类型</Label>
-                              <RadioGroup value={cameraType} onValueChange={(value: CameraType) => setCameraType(value)} className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <RadioGroupItem value="perspective" id="cam-perspective" className="peer sr-only" />
-                                  <Label htmlFor="cam-perspective" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
-                                    透视相机
-                                  </Label>
-                                </div>
-                                <div>
-                                  <RadioGroupItem value="orthographic" id="cam-orthographic" className="peer sr-only" />
-                                  <Label htmlFor="cam-orthographic" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
-                                    正交相机
-                                  </Label>
-                                </div>
-                              </RadioGroup>
-                          </div>
                         <div className="flex flex-col gap-2">
                           <Label className="text-center">网格细节</Label>
                           <RadioGroup 
