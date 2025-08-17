@@ -179,6 +179,7 @@ export default function HomePage() {
   };
 
   const handleBackgroundModeChange = (value: 'blur' | 'solid') => {
+    if (backgroundMode === value) return;
     if (scrollAreaRef.current) {
         scrollPositionRef.current = scrollAreaRef.current.scrollTop;
     }
@@ -245,11 +246,8 @@ export default function HomePage() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>导出3D模型</DialogTitle>
-                  <DialogDescription asChild>
-                    <div>
-                        <p>此功能将把当前场景中的3D网格（包含顶点位移和纹理）导出为GLB文件。请注意，导出过程可能需要一些时间，因为它需要在CPU上重新计算所有顶点的位移。</p>
-                        <p className="mt-2 font-semibold text-destructive">注意：渲染模式设置中的效果（如边界模糊）不包含在导出的模型中。</p>
-                    </div>
+                  <DialogDescription>
+                    此功能将把当前场景导出为GLB文件。导出的模型将包含经过位移的3D网格以及应用了当前渲染设置（如边界模糊）的纹理。
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
