@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 
@@ -175,7 +175,12 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   const sceneRef = useRef<THREE.Scene>();
   const cameraRef = useRef<THREE.PerspectiveCamera | THREE.OrthographicCamera>();
   const meshRef = useRef<THREE.Mesh>();
+  
+  const colorTextureRef = useRef<THREE.Texture>();
+  const depthTextureRef = useRef<THREE.Texture>();
+
   const liveMaterialRef = useRef<THREE.ShaderMaterial>();
+  const bakingMaterialRef = useRef<THREE.ShaderMaterial>();
   const bakedTextureRef = useRef<THREE.WebGLRenderTarget>();
 
   const maxAngleRef = useRef(THREE.MathUtils.degToRad(viewAngleLimit));
@@ -187,19 +192,34 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
   const renderRequestedRef = useRef(false);
 
-  const requestRenderIfNotRequested = () => {
+  const requestRenderIfNotRequested = useCallback(() => {
     if (!renderRequestedRef.current) {
       renderRequestedRef.current = true;
-      requestAnimationFrame(renderScene);
+      requestAnimationFrame(() => {
+        renderRequestedRef.current = false;
+        if (rendererRef.current && sceneRef.current && cameraRef.current) {
+          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        }
+      });
     }
-  };
+  }, []);
 
-  const renderScene = () => {
-    renderRequestedRef.current = false;
-    if (rendererRef.current && sceneRef.current && cameraRef.current) {
-      rendererRef.current.render(sceneRef.current, cameraRef.current);
-    }
-  };
+  const runBakePass = useCallback(() => {
+    if (!rendererRef.current || !bakingMaterialRef.current || !bakedTextureRef.current) return;
+  
+    const bakingScene = new THREE.Scene();
+    const bakingMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bakingMaterialRef.current);
+    bakingScene.add(bakingMesh);
+    
+    rendererRef.current.setRenderTarget(bakedTextureRef.current);
+    rendererRef.current.render(bakingScene, new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1));
+    rendererRef.current.setRenderTarget(null);
+
+    bakingMesh.geometry.dispose();
+    bakingScene.remove(bakingMesh);
+
+    requestRenderIfNotRequested();
+  }, [requestRenderIfNotRequested]);
 
   useImperativeHandle(ref, () => ({
     async handleExport(format: 'glb') {
@@ -212,31 +232,33 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       try {
         const exporter = new GLTFExporter();
         const originalMesh = meshRef.current;
-        const originalMaterial = originalMesh.material as THREE.ShaderMaterial;
-    
-        // 1. Off-screen render to bake texture
-        const renderTarget = new THREE.WebGLRenderer({ 
-          antialias: true,
-          alpha: true
-        });
-        renderTarget.setSize(originalMaterial.uniforms.uResolution.value.x, originalMaterial.uniforms.uResolution.value.y);
-        renderTarget.outputColorSpace = THREE.SRGBColorSpace;
-        
-        const bakedTexture = new THREE.WebGLRenderTarget(
-          originalMaterial.uniforms.uResolution.value.x,
-          originalMaterial.uniforms.uResolution.value.y,
-          {
-            minFilter: THREE.LinearFilter,
-            magFilter: THREE.LinearFilter,
-            format: THREE.RGBAFormat,
-            type: THREE.UnsignedByteType,
-            colorSpace: THREE.SRGBColorSpace,
-          }
+            
+        // 1. Re-run bake pass for export to ensure it's clean and correct
+        const tempRenderTarget = new THREE.WebGLRenderTarget(
+            bakedTextureRef.current!.width,
+            bakedTextureRef.current!.height,
+            {
+                minFilter: THREE.LinearFilter,
+                magFilter: THREE.LinearFilter,
+                format: THREE.RGBAFormat,
+                type: THREE.UnsignedByteType,
+                colorSpace: THREE.SRGBColorSpace,
+            }
         );
-    
-        rendererRef.current.setRenderTarget(bakedTexture);
-        rendererRef.current.render(sceneRef.current, cameraRef.current);
+
+        const tempBakingMaterial = bakingMaterialRef.current!.clone();
+        
+        const bakingScene = new THREE.Scene();
+        const bakingMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), tempBakingMaterial);
+        bakingScene.add(bakingMesh);
+
+        rendererRef.current.setRenderTarget(tempRenderTarget);
+        rendererRef.current.render(bakingScene, new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1));
         rendererRef.current.setRenderTarget(null);
+
+        bakingMesh.geometry.dispose();
+        bakingScene.remove(bakingMesh);
+        tempBakingMaterial.dispose();
     
         // 2. Displace vertices on CPU
         const depthData = await getDepthDataFromImage(depthMap);
@@ -259,7 +281,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     
         // 3. Create export mesh with baked texture and export
         return new Promise<void>((resolve, reject) => {
-          const exportMaterial = new THREE.MeshBasicMaterial({ map: bakedTexture.texture });
+          const exportMaterial = new THREE.MeshBasicMaterial({ map: tempRenderTarget.texture });
           const exportMesh = new THREE.Mesh(clonedGeometry, exportMaterial);
           exportMesh.scale.copy(originalMesh.scale);
     
@@ -273,10 +295,12 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
               a.download = `scene-${Date.now()}.glb`;
               a.click();
               URL.revokeObjectURL(url);
+              tempRenderTarget.dispose();
               resolve();
             },
             (error) => {
               console.error('An error happened during parsing', error);
+              tempRenderTarget.dispose();
               reject(new Error('Failed to export GLB.'));
             },
             { binary: true }
@@ -288,39 +312,28 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     }
   }));
 
- useEffect(() => {
-    if (!liveMaterialRef.current) return;
-    liveMaterialRef.current.uniforms.uDepthMultiplier.value = depthMultiplier;
-    requestRenderIfNotRequested();
-  }, [depthMultiplier]);
-
-  useEffect(() => {
-    if (cameraRef.current?.type === 'PerspectiveCamera') {
-      (cameraRef.current as THREE.PerspectiveCamera).position.z = cameraDistance;
-    }
-    cameraRef.current?.updateProjectionMatrix();
-    requestRenderIfNotRequested();
-  }, [cameraDistance]);
-
-  useEffect(() => {
-    if (cameraRef.current?.type === 'OrthographicCamera') {
-      (cameraRef.current as THREE.OrthographicCamera).zoom = orthographicZoom;
-    }
-    cameraRef.current?.updateProjectionMatrix();
-    requestRenderIfNotRequested();
-  }, [orthographicZoom]);
-  
   useEffect(() => {
     maxAngleRef.current = THREE.MathUtils.degToRad(viewAngleLimit);
   }, [viewAngleLimit]);
 
   useEffect(() => {
+    if (liveMaterialRef.current) {
+        liveMaterialRef.current.uniforms.uDepthMultiplier.value = depthMultiplier;
+    }
+    if (cameraRef.current) {
+        if (cameraRef.current.type === 'PerspectiveCamera') {
+            (cameraRef.current as THREE.PerspectiveCamera).position.z = cameraDistance;
+        } else {
+            (cameraRef.current as THREE.OrthographicCamera).zoom = orthographicZoom;
+        }
+        cameraRef.current.updateProjectionMatrix();
+    }
     if (sceneRef.current && rendererRef.current) {
       sceneRef.current.background = backgroundMode === 'solid' ? new THREE.Color(backgroundColor) : null;
       rendererRef.current.setClearAlpha(backgroundMode === 'blur' ? 0 : 1);
-      requestRenderIfNotRequested();
     }
-  }, [backgroundMode, backgroundColor]);
+    requestRenderIfNotRequested();
+  }, [depthMultiplier, cameraDistance, orthographicZoom, backgroundMode, backgroundColor, requestRenderIfNotRequested]);
 
   useEffect(() => {
     if (meshRef.current && meshRef.current.geometry.parameters.widthSegments !== meshDetail) {
@@ -328,10 +341,42 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       meshRef.current.geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
       requestRenderIfNotRequested();
     }
-  }, [meshDetail]);
+  }, [meshDetail, requestRenderIfNotRequested]);
+  
+  useEffect(() => {
+    if (bakingMaterialRef.current) {
+      bakingMaterialRef.current.uniforms.uBlurIntensity.value = blurIntensity;
+      bakingMaterialRef.current.uniforms.uBlurOffset.value = blurOffset;
+      bakingMaterialRef.current.uniforms.uRenderMode.value = renderMode === 'fill' ? 1 : 0;
+      runBakePass();
+    }
+  }, [blurIntensity, blurOffset, renderMode, runBakePass]);
+
+  useEffect(() => {
+    if (!cameraRef.current || cameraRef.current.type.toLowerCase().startsWith(cameraType)) return;
+
+    const currentMount = mountRef.current;
+    if (!currentMount) return;
+
+    const aspect = currentMount.clientWidth / currentMount.clientHeight;
+    let newCamera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+
+    if (cameraType === 'perspective') {
+      newCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 100);
+      newCamera.position.z = cameraDistance;
+    } else {
+      const frustumSize = 2;
+      newCamera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 0.1, 100);
+      newCamera.zoom = orthographicZoom;
+      newCamera.position.z = 2;
+    }
+    newCamera.updateProjectionMatrix();
+    cameraRef.current = newCamera;
+    requestRenderIfNotRequested();
+  }, [cameraType, cameraDistance, orthographicZoom, requestRenderIfNotRequested]);
 
 
-  const onPointerMove = (event: PointerEvent) => {
+  const onPointerMove = useCallback((event: PointerEvent) => {
       if (!isDraggingRef.current || !meshRef.current || useSensor) return;
       const deltaX = event.clientX - previousPointerPosition.current.x;
       const deltaY = event.clientY - previousPointerPosition.current.y;
@@ -343,16 +388,16 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       previousPointerPosition.current.x = event.clientX;
       previousPointerPosition.current.y = event.clientY;
       requestRenderIfNotRequested();
-  };
+  }, [useSensor, requestRenderIfNotRequested]);
 
-  const onPointerUp = () => {
+  const onPointerUp = useCallback(() => {
       isDraggingRef.current = false;
       if (mountRef.current) mountRef.current.style.cursor = 'grab';
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
-  };
+  }, [onPointerMove]);
   
-  const onPointerDown = (event: PointerEvent) => {
+  const onPointerDown = useCallback((event: PointerEvent) => {
       if(useSensor) return;
       event.preventDefault();
       isDraggingRef.current = true;
@@ -361,9 +406,9 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       if (mountRef.current) mountRef.current.style.cursor = 'grabbing';
       window.addEventListener('pointermove', onPointerMove);
       window.addEventListener('pointerup', onPointerUp);
-  };
+  }, [useSensor, onPointerMove, onPointerUp]);
 
-  const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
+  const handleDeviceOrientation = useCallback((event: DeviceOrientationEvent) => {
       if (!meshRef.current || !event.beta || !event.gamma) return;
   
       if (initialOrientationRef.current.beta === null || initialOrientationRef.current.gamma === null) {
@@ -378,7 +423,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       meshRef.current.rotation.x = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(beta * -0.5), -maxAngle, maxAngle);
       meshRef.current.rotation.y = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(gamma * -0.5), -maxAngle, maxAngle);
       requestRenderIfNotRequested();
-  };
+  }, [requestRenderIfNotRequested]);
 
 
   useEffect(() => {
@@ -408,7 +453,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     return () => {
       window.removeEventListener('deviceorientation', handleDeviceOrientation);
     }
-  }, [useSensor]);
+  }, [useSensor, handleDeviceOrientation, requestRenderIfNotRequested]);
 
   useEffect(() => {
     if (!mountRef.current || !image || !depthMap) return;
@@ -447,31 +492,28 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     const loadingManager = new THREE.LoadingManager();
     const textureLoader = new THREE.TextureLoader(loadingManager);
     
-    const colorTexture = textureLoader.load(image);
-    const depthTexture = textureLoader.load(depthMap);
-
     Promise.all([
-      new Promise(resolve => textureLoader.load(image, resolve)),
-      new Promise(resolve => textureLoader.load(depthMap, resolve))
+      new Promise<THREE.Texture>(resolve => textureLoader.load(image, resolve)),
+      new Promise<THREE.Texture>(resolve => textureLoader.load(depthMap, resolve))
     ]).then(([colorTex, depthTex]) => {
       if (isCancelled) return;
       
-      const loadedColorTexture = colorTex as THREE.Texture;
-      const loadedDepthTexture = depthTex as THREE.Texture;
+      colorTextureRef.current = colorTex;
+      depthTextureRef.current = depthTex;
 
       // --- Baking Pass ---
-      const resolution = new THREE.Vector2(loadedColorTexture.image.width, loadedColorTexture.image.height);
-      const bakedRenderTarget = new THREE.WebGLRenderTarget(resolution.x, resolution.y, {
+      const resolution = new THREE.Vector2(colorTex.image.width, colorTex.image.height);
+      const bakedRT = new THREE.WebGLRenderTarget(resolution.x, resolution.y, {
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
         format: THREE.RGBAFormat,
       });
-      bakedTextureRef.current = bakedRenderTarget;
+      bakedTextureRef.current = bakedRT;
 
-      const bakingMaterial = new THREE.ShaderMaterial({
+      const bakingMat = new THREE.ShaderMaterial({
         uniforms: {
-          uTexture: { value: loadedColorTexture },
-          uDepthMap: { value: loadedDepthTexture },
+          uTexture: { value: colorTex },
+          uDepthMap: { value: depthTex },
           uBlurIntensity: { value: blurIntensity },
           uBlurOffset: { value: blurOffset },
           uResolution: { value: resolution },
@@ -480,21 +522,16 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         vertexShader: bakingVertexShader,
         fragmentShader: bakingFragmentShader,
       });
+      bakingMaterialRef.current = bakingMat;
 
-      const bakingScene = new THREE.Scene();
-      const bakingMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bakingMaterial);
-      bakingScene.add(bakingMesh);
-
-      renderer.setRenderTarget(bakedRenderTarget);
-      renderer.render(bakingScene, new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1));
-      renderer.setRenderTarget(null);
+      runBakePass();
 
       // --- Live Scene Setup ---
       const geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
       const liveMaterial = new THREE.ShaderMaterial({
         uniforms: {
-          uBakedTexture: { value: bakedRenderTarget.texture },
-          uDepthMap: { value: loadedDepthTexture },
+          uBakedTexture: { value: bakedRT.texture },
+          uDepthMap: { value: depthTex },
           uDepthMultiplier: { value: depthMultiplier },
         },
         vertexShader: liveVertexShader,
@@ -503,7 +540,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       liveMaterialRef.current = liveMaterial;
 
       const plane = new THREE.Mesh(geometry, liveMaterial);
-      const imageAspect = loadedColorTexture.image.width / loadedColorTexture.image.height;
+      const imageAspect = colorTex.image.width / colorTex.image.height;
       plane.scale.set(imageAspect, 1, 1);
       scene.add(plane);
       meshRef.current = plane;
@@ -546,9 +583,10 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       
-      colorTexture.dispose();
-      depthTexture.dispose();
+      colorTextureRef.current?.dispose();
+      depthTextureRef.current?.dispose();
       bakedTextureRef.current?.dispose();
+      bakingMaterialRef.current?.dispose();
 
       if (meshRef.current) {
         meshRef.current.geometry?.dispose();
@@ -564,7 +602,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       renderer.dispose();
       rendererRef.current = undefined;
     };
-  }, [image, depthMap, cameraType, meshDetail, blurIntensity, blurOffset, renderMode]);
+  }, [image, depthMap]);
 
   return (
     <>
@@ -585,5 +623,3 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   );
 });
 DepthWeaverScene.displayName = 'DepthWeaverScene';
-
-    
