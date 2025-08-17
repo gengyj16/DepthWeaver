@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { addHistory, getHistory, deleteHistory, type HistoryDbEntry } from '@/lib/db';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function HomePage() {
   const [image, setImage] = useState<string | null>(null);
@@ -172,8 +173,8 @@ export default function HomePage() {
                   )}
                 </div>
                 <CollapsibleContent>
-                  <div className="p-6 bg-background/20 backdrop-blur-sm rounded-2xl shadow-lg space-y-4 border border-white/10">
-                    <div className="flex items-center justify-between">
+                  <div className="p-1 bg-background/20 backdrop-blur-sm rounded-2xl shadow-lg border border-white/10 max-h-[calc(100vh-6rem)] flex flex-col">
+                    <div className="flex items-center justify-between p-5 pb-2">
                        <h3 className="text-lg font-semibold">控制面板</h3>
                        <CollapsibleTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
@@ -181,108 +182,109 @@ export default function HomePage() {
                           </Button>
                        </CollapsibleTrigger>
                     </div>
-
-                    <div className="space-y-6">
-                      <div className="flex items-center justify-between rounded-lg p-3 bg-background/30">
-                        <Label htmlFor="sensor-mode" className="font-semibold">
-                          跟随传感器方向
-                        </Label>
-                        <Switch
-                          id="sensor-mode"
-                          checked={useSensor}
-                          onCheckedChange={setUseSensor}
-                          disabled={!sensorSupported}
-                        />
-                      </div>
-                      {!sensorSupported && <p className="text-xs text-center text-destructive">您的设备不支持方向传感器。</p>}
-
-                      <div className="flex flex-col gap-2">
-                        <Label className="text-center">背景</Label>
-                          <RadioGroup value={backgroundMode} onValueChange={(value: 'blur' | 'solid') => setBackgroundMode(value)} className="grid grid-cols-2 gap-2">
-                            <div>
-                              <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" />
-                              <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-white/20 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-white/20 [&:has([data-state=checked])]:border-primary">
-                                模糊背景
-                              </Label>
-                            </div>
-                            <div>
-                              <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" />
-                              <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-white/20 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-white/20 [&:has([data-state=checked])]:border-primary">
-                                纯色
-                              </Label>
-                            </div>
-                          </RadioGroup>
-                      </div>
-
-                      {backgroundMode === 'solid' && (
-                        <div className="flex items-center gap-4 rounded-lg p-3 bg-background/30">
-                          <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
-                          <input 
-                            id="bg-color-picker"
-                            type="color" 
-                            value={backgroundColor} 
-                            onChange={(e) => setBackgroundColor(e.target.value)}
-                            className="w-24 h-8 p-0 bg-transparent border-none cursor-pointer"
+                    <ScrollArea className='pr-1'>
+                      <div className="p-5 pt-3 space-y-6">
+                        <div className="flex items-center justify-between rounded-lg p-3 bg-background/30">
+                          <Label htmlFor="sensor-mode" className="font-semibold">
+                            跟随传感器方向
+                          </Label>
+                          <Switch
+                            id="sensor-mode"
+                            checked={useSensor}
+                            onCheckedChange={setUseSensor}
+                            disabled={!sensorSupported}
                           />
                         </div>
-                      )}
+                        {!sensorSupported && <p className="text-xs text-center text-destructive">您的设备不支持方向传感器。</p>}
 
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
-                        <Slider 
-                          id="depth-slider"
-                          min={0}
-                          max={5}
-                          step={0.01}
-                          value={[depthMultiplier]}
-                          onValueChange={(value) => setDepthMultiplier(value[0])}
-                        />
+                        <div className="flex flex-col gap-2">
+                          <Label className="text-center">背景</Label>
+                            <RadioGroup value={backgroundMode} onValueChange={(value: 'blur' | 'solid') => setBackgroundMode(value)} className="grid grid-cols-2 gap-2">
+                              <div>
+                                <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" />
+                                <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-white/20 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-white/20 [&:has([data-state=checked])]:border-primary">
+                                  模糊背景
+                                </Label>
+                              </div>
+                              <div>
+                                <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" />
+                                <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-white/20 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-white/20 [&:has([data-state=checked])]:border-primary">
+                                  纯色
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                        </div>
+
+                        {backgroundMode === 'solid' && (
+                          <div className="flex items-center gap-4 rounded-lg p-3 bg-background/30">
+                            <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
+                            <input 
+                              id="bg-color-picker"
+                              type="color" 
+                              value={backgroundColor} 
+                              onChange={(e) => setBackgroundColor(e.target.value)}
+                              className="w-24 h-8 p-0 bg-transparent border-none cursor-pointer"
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
+                          <Slider 
+                            id="depth-slider"
+                            min={0}
+                            max={5}
+                            step={0.01}
+                            value={[depthMultiplier]}
+                            onValueChange={(value) => setDepthMultiplier(value[0])}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="zoom-slider" className="text-center">距离: {cameraDistance.toFixed(2)}</Label>
+                          <Slider
+                            id="zoom-slider"
+                            min={0.5}
+                            max={5}
+                            step={0.01}
+                            value={[cameraDistance]}
+                            onValueChange={(value) => setCameraDistance(value[0])}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="mesh-detail-slider" className="text-center">网格细节: {meshDetail}</Label>
+                          <Slider
+                            id="mesh-detail-slider"
+                            min={256}
+                            max={2048}
+                            step={256}
+                            value={[meshDetail]}
+                            onValueChange={(value) => setMeshDetail(value[0])}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="blur-slider" className="text-center">模糊强度: {blurIntensity.toFixed(2)}</Label>
+                          <Slider
+                            id="blur-slider"
+                            min={0}
+                            max={5}
+                            step={0.1}
+                            value={[blurIntensity]}
+                            onValueChange={(value) => setBlurIntensity(value[0])}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="angle-limit-slider" className="text-center">视角限制: {viewAngleLimit}°</Label>
+                          <Slider
+                            id="angle-limit-slider"
+                            min={0}
+                            max={90}
+                            step={1}
+                            value={[viewAngleLimit]}
+                            onValueChange={(value) => setViewAngleLimit(value[0])}
+                          />
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="zoom-slider" className="text-center">距离: {cameraDistance.toFixed(2)}</Label>
-                        <Slider
-                          id="zoom-slider"
-                          min={0.5}
-                          max={5}
-                          step={0.01}
-                          value={[cameraDistance]}
-                          onValueChange={(value) => setCameraDistance(value[0])}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="mesh-detail-slider" className="text-center">网格细节: {meshDetail}</Label>
-                        <Slider
-                          id="mesh-detail-slider"
-                          min={256}
-                          max={2048}
-                          step={256}
-                          value={[meshDetail]}
-                          onValueChange={(value) => setMeshDetail(value[0])}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="blur-slider" className="text-center">模糊强度: {blurIntensity.toFixed(2)}</Label>
-                        <Slider
-                          id="blur-slider"
-                          min={0}
-                          max={5}
-                          step={0.1}
-                          value={[blurIntensity]}
-                          onValueChange={(value) => setBlurIntensity(value[0])}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="angle-limit-slider" className="text-center">视角限制: {viewAngleLimit}°</Label>
-                        <Slider
-                          id="angle-limit-slider"
-                          min={0}
-                          max={90}
-                          step={1}
-                          value={[viewAngleLimit]}
-                          onValueChange={(value) => setViewAngleLimit(value[0])}
-                        />
-                      </div>
-                    </div>
+                    </ScrollArea>
                   </div>
                 </CollapsibleContent>
               </Collapsible>
