@@ -240,7 +240,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           magFilter: THREE.LinearFilter,
           format: THREE.RGBAFormat,
           type: THREE.UnsignedByteType,
-          colorSpace: THREE.SRGBColorSpace,
         });
 
         const tempBakingMaterial = bakingMaterialRef.current!.clone();
@@ -289,7 +288,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         context.putImageData(imageData, 0, 0);
 
         const canvasTexture = new THREE.CanvasTexture(canvas);
-        canvasTexture.colorSpace = THREE.SRGBColorSpace;
         canvasTexture.flipY = false;
         canvasTexture.needsUpdate = true;
 
@@ -517,6 +515,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     ]).then(([colorTex, depthTex]) => {
       if (isCancelled) return;
       
+      colorTex.colorSpace = THREE.SRGBColorSpace;
       colorTextureRef.current = colorTex;
       depthTextureRef.current = depthTex;
 
@@ -642,3 +641,5 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   );
 });
 DepthWeaverScene.displayName = 'DepthWeaverScene';
+
+    
