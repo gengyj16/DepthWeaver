@@ -234,7 +234,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         const originalMesh = meshRef.current;
         const renderer = rendererRef.current;
             
-        // 1. Re-run bake pass for export to ensure it's clean and correct
         const { width, height } = bakedTextureRef.current;
         const tempRenderTarget = new THREE.WebGLRenderTarget(width, height, {
           minFilter: THREE.LinearFilter,
@@ -258,7 +257,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         bakingScene.remove(bakingMesh);
         tempBakingMaterial.dispose();
     
-        // 2. Displace vertices on CPU
         const depthData = await getDepthDataFromImage(depthMap);
         const { width: depthWidth, height: depthHeight } = depthData;
         
@@ -277,7 +275,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           positionAttribute.setZ(i, originalMesh.geometry.attributes.position.getZ(i) + displacement);
         }
         
-        // 3. Convert RenderTarget to Canvas for exporter
         const buffer = new Uint8Array(width * height * 4);
         renderer.readRenderTargetPixels(tempRenderTarget, 0, 0, width, height, buffer);
 
@@ -293,11 +290,11 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
         const canvasTexture = new THREE.CanvasTexture(canvas);
         canvasTexture.colorSpace = THREE.SRGBColorSpace;
+        canvasTexture.flipY = false;
         canvasTexture.needsUpdate = true;
 
         tempRenderTarget.dispose();
     
-        // 4. Create export mesh with baked texture and export
         return new Promise<void>((resolve, reject) => {
           const exportMaterial = new THREE.MeshBasicMaterial({ map: canvasTexture });
           const exportMesh = new THREE.Mesh(clonedGeometry, exportMaterial);
