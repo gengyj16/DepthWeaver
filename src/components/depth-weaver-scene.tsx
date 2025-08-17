@@ -194,8 +194,16 @@ export function DepthWeaverScene({
         setIsLoading(false);
     });
     const textureLoader = new THREE.TextureLoader(loadingManager);
-    const colorTexture = textureLoader.load(image);
-    const depthTexture = textureLoader.load(depthMap);
+    
+    const applyTextureSettings = (texture: THREE.Texture) => {
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      texture.needsUpdate = true;
+    };
+
+    const colorTexture = textureLoader.load(image, applyTextureSettings);
+    const depthTexture = textureLoader.load(depthMap, applyTextureSettings);
 
     const geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
     const material = new THREE.ShaderMaterial({
