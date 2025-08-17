@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 type RenderMode = 'blur' | 'fill';
+type CameraType = 'perspective' | 'orthographic';
 
 interface DepthWeaverSceneProps {
   image: string;
@@ -19,6 +20,7 @@ interface DepthWeaverSceneProps {
   backgroundColor: string;
   renderMode: RenderMode;
   selectionRange: number;
+  cameraType: CameraType;
 }
 
 export function DepthWeaverScene({ 
@@ -34,11 +36,12 @@ export function DepthWeaverScene({
   backgroundColor,
   renderMode,
   selectionRange,
+  cameraType,
 }: DepthWeaverSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const materialRef = useRef<THREE.ShaderMaterial>();
-  const cameraRef = useRef<THREE.PerspectiveCamera>();
+  const cameraRef = useRef<THREE.PerspectiveCamera | THREE.OrthographicCamera>();
   const meshRef = useRef<THREE.Mesh>();
   const sceneRef = useRef<THREE.Scene>();
   const rendererRef = useRef<THREE.WebGLRenderer>();
@@ -196,9 +199,18 @@ export function DepthWeaverScene({
       scene.background = null;
     }
 
-    const camera = new THREE.PerspectiveCamera(75, currentMount.clientWidth / currentMount.clientHeight, 0.1, 100);
+    let camera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+    const aspect = currentMount.clientWidth / currentMount.clientHeight;
+
+    if (cameraType === 'perspective') {
+        camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 100);
+    } else {
+        const frustumSize = 2;
+        camera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 0.1, 100);
+    }
     camera.position.z = cameraDistance;
     cameraRef.current = camera;
+
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setClearAlpha(backgroundMode === 'blur' ? 0 : 1);
@@ -323,12 +335,25 @@ export function DepthWeaverScene({
     }
 
     const handleResize = () => {
-      camera.aspect = currentMount.clientWidth / currentMount.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
+      const width = currentMount.clientWidth;
+      const height = currentMount.clientHeight;
+      renderer.setSize(width, height);
       if (materialRef.current) {
-        materialRef.current.uniforms.uResolution.value.set(currentMount.clientWidth, currentMount.clientHeight);
+        materialRef.current.uniforms.uResolution.value.set(width, height);
       }
+      
+      const newAspect = width / height;
+      if (camera.type === 'PerspectiveCamera') {
+        (camera as THREE.PerspectiveCamera).aspect = newAspect;
+      } else if (camera.type === 'OrthographicCamera') {
+        const cam = camera as THREE.OrthographicCamera;
+        const frustumSize = 2;
+        cam.left = frustumSize * newAspect / -2;
+        cam.right = frustumSize * newAspect / 2;
+        cam.top = frustumSize / 2;
+        cam.bottom = frustumSize / -2;
+      }
+      camera.updateProjectionMatrix();
     };
     window.addEventListener('resize', handleResize);
 
@@ -374,7 +399,7 @@ export function DepthWeaverScene({
         }
       }
     };
-  }, [image, depthMap]);
+  }, [image, depthMap, cameraType]);
 
   return (
     <>

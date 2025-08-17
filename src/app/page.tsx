@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/sheet"
 
 type RenderMode = 'blur' | 'fill';
+type CameraType = 'perspective' | 'orthographic';
 
 export default function HomePage() {
   const [image, setImage] = useState<string | null>(null);
@@ -42,6 +43,7 @@ export default function HomePage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [renderMode, setRenderMode] = useState<RenderMode>('blur');
   const [selectionRange, setSelectionRange] = useState(10);
+  const [cameraType, setCameraType] = useState<CameraType>('perspective');
 
 
   useEffect(() => {
@@ -161,6 +163,7 @@ export default function HomePage() {
               backgroundColor={backgroundMode === 'solid' ? backgroundColor : 'transparent'}
               renderMode={renderMode}
               selectionRange={selectionRange}
+              cameraType={cameraType}
             />
 
             <div className={cn("absolute bottom-6 right-6 z-20 transition-opacity", isSettingsOpen && "opacity-0 pointer-events-none")}>
@@ -304,6 +307,23 @@ export default function HomePage() {
                             />
                           </div>
                         )}
+                        <div className="flex flex-col gap-2">
+                            <Label className="text-center">相机类型</Label>
+                              <RadioGroup value={cameraType} onValueChange={(value: CameraType) => setCameraType(value)} className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <RadioGroupItem value="perspective" id="cam-perspective" className="peer sr-only" />
+                                  <Label htmlFor="cam-perspective" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                    透视相机
+                                  </Label>
+                                </div>
+                                <div>
+                                  <RadioGroupItem value="orthographic" id="cam-orthographic" className="peer sr-only" />
+                                  <Label htmlFor="cam-orthographic" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                    正交相机
+                                  </Label>
+                                </div>
+                              </RadioGroup>
+                          </div>
                         <div className="flex flex-col gap-2">
                           <Label className="text-center">网格细节</Label>
                           <RadioGroup 
