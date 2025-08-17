@@ -305,11 +305,12 @@ export function DepthWeaverScene({
     };
     window.addEventListener('resize', handleResize);
 
+    let animationFrameId: number;
     const animate = () => {
-      requestAnimationFrame(animate);
+      animationFrameId = requestAnimationFrame(animate);
       renderer.render(scene, camera);
     };
-    const animationFrameId = requestAnimationFrame(animate);
+    animate();
 
     return () => {
       cancelAnimationFrame(animationFrameId);
@@ -319,18 +320,32 @@ export function DepthWeaverScene({
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('deviceorientation', handleDeviceOrientation);
 
+      // Dispose of Three.js objects
       if (meshRef.current) {
+        if(meshRef.current.geometry) {
+            meshRef.current.geometry.dispose();
+        }
+        if(meshRef.current.material) {
+            // If the material is an array, dispose each one.
+            if (Array.isArray(meshRef.current.material)) {
+                meshRef.current.material.forEach(material => material.dispose());
+            } else {
+                (meshRef.current.material as THREE.Material).dispose();
+            }
+        }
         scene.remove(meshRef.current);
-        meshRef.current.geometry.dispose();
         meshRef.current = undefined;
       }
       
-      if (currentMount && renderer.domElement) {
-         currentMount.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
       colorTexture.dispose();
       depthTexture.dispose();
+
+      if (renderer) {
+        renderer.dispose();
+        if (renderer.domElement && currentMount.contains(renderer.domElement)) {
+           currentMount.removeChild(renderer.domElement);
+        }
+      }
     };
   }, [image, depthMap]);
 
