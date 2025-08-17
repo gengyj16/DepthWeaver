@@ -431,8 +431,7 @@ export default function HomePage() {
                               </div>
                             </RadioGroup>
                         </div>
-                        <div className="h-[52px]">
-                         {backgroundMode === 'solid' && (
+                        {backgroundMode === 'solid' && (
                           <div className="flex items-center gap-4 rounded-lg p-3 bg-background/30">
                             <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
                             <input 
@@ -444,7 +443,6 @@ export default function HomePage() {
                             />
                           </div>
                         )}
-                        </div>
                         <div className="flex flex-col gap-2">
                           <Label className="text-center">网格细节</Label>
                           <RadioGroup 
@@ -486,3 +484,5 @@ export default function HomePage() {
     </main>
   );
 }
+
+    
