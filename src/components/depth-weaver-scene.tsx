@@ -114,32 +114,37 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         positionAttribute.setZ(i, originalZ + normalZ * displacement);
       }
       
-      const texture = new THREE.TextureLoader().load(image);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      const exportMaterial = new THREE.MeshBasicMaterial({ map: texture });
-      
-      const exportMesh = new THREE.Mesh(clonedGeometry, exportMaterial);
-      exportMesh.scale.copy(originalMesh.scale);
-      
       return new Promise<void>((resolve, reject) => {
-        exporter.parse(
-          exportMesh,
-          (gltf) => {
-            const blob = new Blob([gltf as ArrayBuffer], { type: 'model/gltf-binary' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `scene-${Date.now()}.glb`;
-            a.click();
-            URL.revokeObjectURL(url);
-            resolve();
-          },
-          (error) => {
-            console.error('An error happened during parsing', error);
-            reject(new Error('Failed to export GLB.'));
-          },
-          { binary: true }
-        );
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.load(image, (texture) => {
+          texture.colorSpace = THREE.SRGBColorSpace;
+          const exportMaterial = new THREE.MeshBasicMaterial({ map: texture });
+          
+          const exportMesh = new THREE.Mesh(clonedGeometry, exportMaterial);
+          exportMesh.scale.copy(originalMesh.scale);
+
+          exporter.parse(
+            exportMesh,
+            (gltf) => {
+              const blob = new Blob([gltf as ArrayBuffer], { type: 'model/gltf-binary' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `scene-${Date.now()}.glb`;
+              a.click();
+              URL.revokeObjectURL(url);
+              resolve();
+            },
+            (error) => {
+              console.error('An error happened during parsing', error);
+              reject(new Error('Failed to export GLB.'));
+            },
+            { binary: true }
+          );
+        }, undefined, (error) => {
+          console.error('An error happened during texture loading', error);
+          reject(new Error('Failed to load texture for export.'));
+        });
       });
     }
   }));
@@ -551,5 +556,3 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   );
 });
 DepthWeaverScene.displayName = 'DepthWeaverScene';
-
-    
