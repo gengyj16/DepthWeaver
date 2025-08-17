@@ -515,7 +515,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     ]).then(([colorTex, depthTex]) => {
       if (isCancelled) return;
       
-      colorTex.colorSpace = THREE.SRGBColorSpace;
       colorTextureRef.current = colorTex;
       depthTextureRef.current = depthTex;
 
