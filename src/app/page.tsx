@@ -66,6 +66,7 @@ export default function HomePage() {
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isFillWarningOpen, setIsFillWarningOpen] = useState(false);
+  const [scrollAreaKey, setScrollAreaKey] = useState(Date.now());
   const sceneRef = useRef<DepthWeaverSceneHandle>(null);
   const { toast } = useToast();
 
@@ -170,6 +171,11 @@ export default function HomePage() {
     }
   };
 
+  const handleBackgroundModeChange = (value: 'blur' | 'solid') => {
+    setBackgroundMode(value);
+    setScrollAreaKey(Date.now());
+  };
+
   const isSceneVisible = image && depthMap;
 
   return (
@@ -269,7 +275,7 @@ export default function HomePage() {
                   <SheetHeader>
                     <SheetTitle className="text-xl">控制面板</SheetTitle>
                   </SheetHeader>
-                  <ScrollArea className="flex-1 pr-6 -mr-6">
+                  <ScrollArea key={scrollAreaKey} className="flex-1 pr-6 -mr-6">
                     <div className="py-6 space-y-6">
                       <div className="flex items-center justify-between rounded-lg p-3 bg-muted/50">
                         <Label htmlFor="sensor-mode" className="font-semibold">
@@ -416,7 +422,7 @@ export default function HomePage() {
                         <Label className="font-semibold">高级设置</Label>
                          <div className="flex flex-col gap-2">
                           <Label className="text-center">背景</Label>
-                            <RadioGroup value={backgroundMode} onValueChange={(value: 'blur' | 'solid') => setBackgroundMode(value)} className="grid grid-cols-2 gap-2">
+                            <RadioGroup value={backgroundMode} onValueChange={(value: 'blur' | 'solid') => handleBackgroundModeChange(value)} className="grid grid-cols-2 gap-2">
                               <div>
                                 <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" />
                                 <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
