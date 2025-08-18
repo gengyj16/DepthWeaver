@@ -455,7 +455,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                             id="hf-endpoint"
                             value={hfEndpoint}
                             onChange={(e) => handleHfEndpointChange(e.target.value)}
-                            placeholder="https://hf-mirror.com"
+                            placeholder="https://huggingface.co/"
                         />
                     </div>
                 </div>
@@ -509,5 +509,3 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
-
-    
