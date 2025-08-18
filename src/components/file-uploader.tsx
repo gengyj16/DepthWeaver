@@ -473,7 +473,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                                     <SelectValue placeholder="选择一个模型" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="onnx-community/depth-anything-v2-small">Small 速度最快，文件最小</SelectItem>
+                                    <SelectItem value="onnx-community/depth-anything-v2-small">Small 速度最快，文件最小(推荐)</SelectItem>
                                     <SelectItem value="onnx-community/depth-anything-v2-base">Base 中等</SelectItem>
                                     <SelectItem value="onnx-community/depth-anything-v2-large">Large 速度最慢，文件最大</SelectItem>
                                 </SelectContent>
@@ -537,4 +537,6 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
 }
 
     
+    
+
     
