@@ -244,7 +244,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 const { pipeline, env } = await import('@xenova/transformers');
                 
                 if (hfEndpoint) {
-                    env.endpoint = hfEndpoint;
+                    env.remoteHost = hfEndpoint;
                 }
                 env.allowLocalModels = true;
                 env.allowRemoteModels = true;
@@ -455,7 +455,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                             id="hf-endpoint"
                             value={hfEndpoint}
                             onChange={(e) => handleHfEndpointChange(e.target.value)}
-                            placeholder="https://huggingface.co/"
+                            placeholder="https://huggingface.co"
                         />
                     </div>
                 </div>
@@ -509,3 +509,5 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
