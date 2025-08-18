@@ -13,12 +13,12 @@ class DepthEstimationPipeline {
     static instance: Pipeline | null = null;
     static model: string | null = null;
     static device: string | null = null;
+    static_device_checked = false;
 
     static async getInstance(model: string, progress_callback?: Function) {
-        if (this.instance === null || this.model !== model) {
-            this.model = model;
-            
-            let device: 'wasm' | 'webgpu' = 'wasm';
+        
+        if (!this.static_device_checked) {
+             let device: 'wasm' | 'webgpu' = 'wasm';
             // @ts-ignore
             if (typeof self.navigator !== 'undefined' && self.navigator.gpu) {
                 try {
@@ -31,15 +31,20 @@ class DepthEstimationPipeline {
                 }
             }
             this.device = device;
-            
-            this.instance = await pipeline(this.task, model, { progress_callback, device });
             self.postMessage({ type: 'device-info', payload: this.device });
-        } else {
-             // If instance exists, still report the device info
-             if (this.device) {
-                self.postMessage({ type: 'device-info', payload: this.device });
-            }
+            this.static_device_checked = true;
         }
+
+
+        if (model === 'pre-check') {
+            return null;
+        }
+
+        if (this.instance === null || this.model !== model) {
+            this.model = model;
+            this.instance = await pipeline(this.task, model, { progress_callback, device: this.device || 'wasm' });
+        }
+        
         return this.instance;
     }
 }
@@ -60,12 +65,16 @@ self.onmessage = async (event: MessageEvent) => {
                     self.postMessage({ type: 'status', payload: progress.status });
                 }
             });
-            self.postMessage({ type: 'status', payload: '就绪' });
+            if (payload.model !== 'pre-check') {
+                 self.postMessage({ type: 'status', payload: '就绪' });
+            }
 
         } else if (type === 'generate') {
             self.postMessage({ type: 'status', payload: '正在生成深度图...' });
 
             const detector = await DepthEstimationPipeline.getInstance(DepthEstimationPipeline.model!, (p: any) => console.log(p));
+            if (!detector) throw new Error("Detector not initialized");
+
             const { depth } = await detector(payload.imageUrl) as any;
             
             // Convert single-channel grayscale to RGBA
