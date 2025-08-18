@@ -13,11 +13,12 @@ class DepthEstimationPipeline {
     static instance: Pipeline | null = null;
     static model: string | null = null;
     static device: string | null = null;
-    static_device_checked = false;
+    static initialized = false;
+    static device_checked = false;
 
     static async getInstance(model: string, progress_callback?: Function) {
         
-        if (!this.static_device_checked) {
+        if (!this.device_checked) {
              let device: 'wasm' | 'webgpu' = 'wasm';
             // @ts-ignore
             if (typeof self.navigator !== 'undefined' && self.navigator.gpu) {
@@ -32,7 +33,7 @@ class DepthEstimationPipeline {
             }
             this.device = device;
             self.postMessage({ type: 'device-info', payload: this.device });
-            this.static_device_checked = true;
+            this.device_checked = true;
         }
 
 
@@ -42,7 +43,15 @@ class DepthEstimationPipeline {
 
         if (this.instance === null || this.model !== model) {
             this.model = model;
-            this.instance = await pipeline(this.task, model, { progress_callback, device: this.device || 'wasm' });
+            this.initialized = false;
+            try {
+                this.instance = await pipeline(this.task, model, { progress_callback, device: this.device || 'wasm' });
+                this.initialized = true;
+            } catch(e) {
+                this.instance = null;
+                this.initialized = false;
+                throw e;
+            }
         }
         
         return this.instance;
@@ -73,7 +82,7 @@ self.onmessage = async (event: MessageEvent) => {
             self.postMessage({ type: 'status', payload: '正在生成深度图...' });
 
             const detector = await DepthEstimationPipeline.getInstance(DepthEstimationPipeline.model!, (p: any) => console.log(p));
-            if (!detector) throw new Error("Detector not initialized");
+            if (!detector || !DepthEstimationPipeline.initialized) throw new Error("Detector not initialized or initialization failed.");
 
             const { depth } = await detector(payload.imageUrl) as any;
             
@@ -93,3 +102,5 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', payload: e.message });
     }
 };
+
+    

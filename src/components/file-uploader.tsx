@@ -313,19 +313,27 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         if (!imageFile || !workerRef.current) return;
         
         if (localModelStatus !== '就绪') {
-             toast({ variant: "destructive", title: "本地模型未就绪", description: "请等待模型下载完成或检查设置。" });
-             initializeLocalGenerator();
+             toast({ variant: "destructive", title: "本地模型未就绪", description: "请等待模型下载完成或检查设置后重试。" });
+             if (localModelStatus === '错误') {
+                initializeLocalGenerator();
+             }
              return;
         }
 
         const imageUrl = URL.createObjectURL(imageFile);
-        workerRef.current.postMessage({
-            type: 'generate',
-            payload: { imageUrl }
-        });
-        // The URL needs to be revoked after the worker has used it.
-        // For simplicity, we can do it after a short delay, assuming worker has loaded it.
-        setTimeout(() => URL.revokeObjectURL(imageUrl), 1000);
+        
+        setTimeout(() => {
+          if(workerRef.current){
+             workerRef.current.postMessage({
+                type: 'generate',
+                payload: { imageUrl }
+            });
+            // The URL needs to be revoked after the worker has used it.
+            // For simplicity, we can do it after a short delay, assuming worker has loaded it.
+            setTimeout(() => URL.revokeObjectURL(imageUrl), 1000);
+          }
+        }, 0);
+
 
     }, [imageFile, localModelStatus, initializeLocalGenerator, toast]);
     
@@ -473,7 +481,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                      <p className="text-sm text-muted-foreground">
                         启用此选项后，生成深度图功能将完全在浏览器本地进行，生成过程中设备内存占用会短暂升高，根据处理器性能单张处理时长可能在几秒到十几秒不等。首次使用此功能需要连接到国际互联网下载模型。
                     </p>
-                    <div className="space-y-4">
+                     <div className="space-y-4">
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
                                 <Label htmlFor="local-model-select">本地模型选择</Label>
@@ -552,3 +560,5 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
