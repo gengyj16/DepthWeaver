@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, TouchEvent } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,6 +40,11 @@ function HistoryEntryCard({ entry, onLoad, onDelete }: HistoryEntryProps) {
       };
     }
   }, [entry.image]);
+
+  const handleTouchEnd = (e: TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    onLoad(entry);
+  };
   
   if (!imageUrl) return null;
 
@@ -49,6 +54,7 @@ function HistoryEntryCard({ entry, onLoad, onDelete }: HistoryEntryProps) {
         <div
           className="aspect-square w-full relative cursor-pointer"
           onClick={() => onLoad(entry)}
+          onTouchEnd={handleTouchEnd}
         >
           <Image
             src={imageUrl}
