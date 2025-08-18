@@ -4,7 +4,6 @@ import { pipeline, env } from '@huggingface/transformers';
 import type { Pipeline } from '@huggingface/transformers';
 
 // Configure the environment
-env.allowLocalModels = true;
 env.allowRemoteModels = true;
 env.useFS = false; 
 env.useCache = true;
@@ -17,8 +16,26 @@ class DepthEstimationPipeline {
     static async getInstance(model: string, progress_callback?: Function) {
         if (this.instance === null || this.model !== model) {
             this.model = model;
+            
+            const executionProviders: string[] = ['wasm'];
+            // @ts-ignore
+            if (typeof self.navigator !== 'undefined' && self.navigator.gpu) {
+                try {
+                    const adapter = await self.navigator.gpu.requestAdapter();
+                    if (adapter) {
+                        executionProviders.unshift('webgpu');
+                    }
+                } catch (e) {
+                    console.warn('WebGPU is not available.', e);
+                }
+            }
+            
             this.instance = await pipeline(this.task, model, {
                 progress_callback,
+                // @ts-ignore
+                onnx_options: {
+                    executionProviders
+                }
             });
         }
         return this.instance;
