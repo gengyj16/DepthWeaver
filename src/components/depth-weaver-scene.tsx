@@ -404,20 +404,24 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         const totalAnimationDuration = panToSideDuration + orbitDuration + returnToCenterDuration;
         
         const scaleFactor = duration / totalAnimationDuration;
-        const scaledPanDuration = panToSideDuration * scaleFactor;
-        const scaledOrbitDuration = orbitDuration * scaleFactor;
-        const scaledReturnDuration = returnToCenterDuration * scaleFactor;
+        const panEndProgress = (panToSideDuration * scaleFactor) / duration;
+        const orbitEndProgress = ((panToSideDuration + orbitDuration) * scaleFactor) / duration;
+
+        const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
 
         const animateAndRecord = () => {
           const elapsedTime = Date.now() - startTime;
+          const linearProgress = Math.min(elapsedTime / duration, 1);
+          const easedProgress = easeInOutSine(linearProgress);
+
           if (!meshRef.current) {
             if (recorder.state === 'recording') recorder.stop();
             return;
           }
 
-          if (elapsedTime >= duration) {
+          if (linearProgress >= 1) {
             if (recorder.state === 'recording') {
-               // Ensure the final frame is rendered before stopping
+               meshRef.current.rotation.set(0, 0, 0);
                requestRenderIfNotRequested();
                recorder.stop();
             }
@@ -426,28 +430,30 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
             }
             return;
           }
-          
-          if (elapsedTime < scaledPanDuration) {
-              const progress = elapsedTime / scaledPanDuration;
-              meshRef.current.rotation.y = THREE.MathUtils.lerp(0, -maxAngle, progress);
-              meshRef.current.rotation.x = 0;
-          }
-          else if (elapsedTime < scaledPanDuration + scaledOrbitDuration) {
-              const orbitElapsedTime = elapsedTime - scaledPanDuration;
-              const orbitProgress = orbitElapsedTime / scaledOrbitDuration;
-              const angle = -Math.PI / 2 + orbitProgress * Math.PI * 2;
-              meshRef.current.rotation.y = Math.cos(angle) * maxAngle;
-              meshRef.current.rotation.x = Math.sin(angle) * maxAngle;
-          }
-          else {
-              const returnElapsedTime = elapsedTime - (scaledPanDuration + scaledOrbitDuration);
-              const returnProgress = returnElapsedTime / scaledReturnDuration;
-              const fromY = Math.cos(-Math.PI/2 + Math.PI*2) * maxAngle;
-              const fromX = Math.sin(-Math.PI/2 + Math.PI*2) * maxAngle;
 
-              meshRef.current.rotation.y = THREE.MathUtils.lerp(fromY, 0, returnProgress);
-              meshRef.current.rotation.x = THREE.MathUtils.lerp(fromX, 0, returnProgress);
+          let currentX, currentY;
+
+          if (easedProgress < panEndProgress) {
+            // Phase 1: Pan to left
+            const phaseProgress = easedProgress / panEndProgress;
+            currentY = THREE.MathUtils.lerp(0, -maxAngle, phaseProgress);
+            currentX = 0;
+          } else if (easedProgress < orbitEndProgress) {
+            // Phase 2: Orbit
+            const phaseProgress = (easedProgress - panEndProgress) / (orbitEndProgress - panEndProgress);
+            const angle = -Math.PI / 2 + phaseProgress * Math.PI * 2;
+            currentY = Math.cos(angle) * maxAngle;
+            currentX = Math.sin(angle) * maxAngle;
+          } else {
+            // Phase 3: Return to center
+            const phaseProgress = (easedProgress - orbitEndProgress) / (1 - orbitEndProgress);
+            const fromY = Math.cos(-Math.PI / 2 + Math.PI * 2) * maxAngle;
+            currentY = THREE.MathUtils.lerp(fromY, 0, phaseProgress);
+            currentX = 0;
           }
+          
+          meshRef.current.rotation.y = currentY;
+          meshRef.current.rotation.x = currentX;
 
           requestRenderIfNotRequested();
           animationFrameIdRef.current = requestAnimationFrame(animateAndRecord);
