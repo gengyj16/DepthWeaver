@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
+import type { Pipeline } from '@huggingface/transformers';
 
 interface FileUploaderProps {
     onFilesSelected: (image: File, depthMap: File) => void;
@@ -182,7 +183,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const [isLocalGenerating, setIsLocalGenerating] = useState(false);
     const [localModelStatus, setLocalModelStatus] = useState('未下载');
     const [hfEndpoint, setHfEndpoint] = useState('https://hf-mirror.com');
-    const pipelineRef = useRef<any>(null);
+    const pipelineRef = useRef<Pipeline | null>(null);
 
     useEffect(() => {
         try {
@@ -285,7 +286,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         
         try {
             const imageUrl = URL.createObjectURL(imageFile);
-            const { depth } = await pipelineRef.current(imageUrl);
+            const { depth } = await pipelineRef.current(imageUrl) as any;
             URL.revokeObjectURL(imageUrl);
             
             const canvas = document.createElement('canvas');
@@ -294,7 +295,18 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             const ctx = canvas.getContext('2d');
             if (!ctx) throw new Error('Could not get canvas context');
             
-            const imageData = new ImageData(new Uint8ClampedArray(depth.data), depth.width, depth.height);
+            // The model returns a single-channel (grayscale) depth map.
+            // We need to convert it to a 4-channel RGBA image to use with ImageData.
+            const rgbaData = new Uint8ClampedArray(depth.width * depth.height * 4);
+            for (let i = 0; i < depth.data.length; ++i) {
+                const depthValue = depth.data[i];
+                rgbaData[i * 4] = depthValue;     // R
+                rgbaData[i * 4 + 1] = depthValue; // G
+                rgbaData[i * 4 + 2] = depthValue; // B
+                rgbaData[i * 4 + 3] = 255;        // A
+            }
+
+            const imageData = new ImageData(rgbaData, depth.width, depth.height);
             ctx.putImageData(imageData, 0, 0);
 
             canvas.toBlob((blob) => {
@@ -423,7 +435,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     };
 
     const helpDialogContent = (
-         <DialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="sm:max-w-[525px]">
+         <DialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="sm:max-w-[525px] max-h-[80vh] flex flex-col">
             <DialogHeader>
                 <DialogTitle>关于“生成深度图”</DialogTitle>
                 <DialogDescription asChild>
@@ -441,7 +453,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                    </div>
                 </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 overflow-y-auto px-1">
                 <div className="space-y-2">
                     <div className="flex items-baseline gap-2">
                         <Label htmlFor="api-url" className="font-bold">
@@ -531,6 +543,5 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
-
 
     
