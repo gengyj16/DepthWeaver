@@ -180,6 +180,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     
     // Local generation state
     const [useLocalGenerator, setUseLocalGenerator] = useState(false);
+    const [useMirror, setUseMirror] = useState(false);
     const [isLocalGenerating, setIsLocalGenerating] = useState(false);
     const [localModelStatus, setLocalModelStatus] = useState('未初始化');
     const [localModelName, setLocalModelName] = useState('onnx-community/depth-anything-v2-small');
@@ -194,6 +195,9 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             
             const savedUseLocal = localStorage.getItem('useLocalGenerator');
             if(savedUseLocal) setUseLocalGenerator(JSON.parse(savedUseLocal));
+
+            const savedUseMirror = localStorage.getItem('useMirror');
+            if(savedUseMirror) setUseMirror(JSON.parse(savedUseMirror));
 
             const savedModelName = localStorage.getItem('localModelName');
             if (savedModelName) setLocalModelName(savedModelName);
@@ -266,21 +270,30 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         setLocalModelStatus('正在准备环境...');
         workerRef.current.postMessage({
             type: 'init',
-            payload: { model: localModelName }
+            payload: { model: localModelName, useMirror }
         });
-    }, [localModelName]);
+    }, [localModelName, useMirror]);
 
     useEffect(() => {
         if (useLocalGenerator) {
             initializeLocalGenerator();
         }
-    }, [useLocalGenerator, localModelName, initializeLocalGenerator]);
+    }, [useLocalGenerator, localModelName, useMirror, initializeLocalGenerator]);
 
     
     const handleUseLocalChange = (checked: boolean) => {
         setUseLocalGenerator(checked);
         try {
             localStorage.setItem('useLocalGenerator', JSON.stringify(checked));
+        } catch (error) {
+            console.error("Failed to write to localStorage", error);
+        }
+    }
+    
+    const handleUseMirrorChange = (checked: boolean) => {
+        setUseMirror(checked);
+        try {
+            localStorage.setItem('useMirror', JSON.stringify(checked));
         } catch (error) {
             console.error("Failed to write to localStorage", error);
         }
@@ -481,6 +494,10 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                      <p className="text-sm text-muted-foreground">
                         启用此选项后，生成深度图功能将完全在浏览器本地进行，生成过程中设备内存占用会短暂升高，根据处理器性能单张处理时长可能在几秒到十几秒不等。首次使用此功能需要连接到国际互联网下载模型。
                     </p>
+                    <div className="flex items-center space-x-2">
+                        <Switch id="mirror-switch" checked={useMirror} onCheckedChange={handleUseMirrorChange}/>
+                        <Label htmlFor="mirror-switch">使用镜像站下载模型 (推荐中国大陆用户)</Label>
+                    </div>
                      <div className="space-y-4">
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
@@ -560,5 +577,3 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
-
-    

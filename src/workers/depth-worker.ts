@@ -16,8 +16,10 @@ class DepthEstimationPipeline {
     static initialized = false;
     static device_checked = false;
 
-    static async getInstance(model: string, progress_callback?: Function) {
+    static async getInstance(model: string, useMirror: boolean, progress_callback?: Function) {
         
+        env.remoteHost = useMirror ? "https://www.modelscope.cn/models" : "https://huggingface.co";
+
         if (!this.device_checked) {
              let device: 'wasm' | 'webgpu' = 'wasm';
             // @ts-ignore
@@ -64,7 +66,7 @@ self.onmessage = async (event: MessageEvent) => {
 
     try {
         if (type === 'init') {
-            await DepthEstimationPipeline.getInstance(payload.model, (progress: any) => {
+            await DepthEstimationPipeline.getInstance(payload.model, payload.useMirror, (progress: any) => {
                 if (progress.status === 'progress') {
                     const percentage = (progress.progress).toFixed(2);
                     self.postMessage({ type: 'status', payload: `下载中... ${percentage}% (${(progress.loaded / 1024 / 1024).toFixed(2)}MB / ${(progress.total / 1024 / 1024).toFixed(2)}MB)` });
@@ -81,7 +83,7 @@ self.onmessage = async (event: MessageEvent) => {
         } else if (type === 'generate') {
             self.postMessage({ type: 'status', payload: '正在生成深度图...' });
 
-            const detector = await DepthEstimationPipeline.getInstance(DepthEstimationPipeline.model!, (p: any) => console.log(p));
+            const detector = await DepthEstimationPipeline.getInstance(DepthEstimationPipeline.model!, false, (p: any) => console.log(p));
             if (!detector || !DepthEstimationPipeline.initialized) throw new Error("Detector not initialized or initialization failed.");
 
             const { depth } = await detector(payload.imageUrl) as any;
@@ -102,5 +104,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', payload: e.message });
     }
 };
-
-    
