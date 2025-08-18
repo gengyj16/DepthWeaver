@@ -397,7 +397,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           meshRef.current.rotation.set(0, 0, 0);
           requestRenderIfNotRequested();
         }
-
+        
         for (let i = 0; i < totalFrames; i++) {
           if (!meshRef.current) break;
 
@@ -407,27 +407,29 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           
           const maxAngle = maxAngleRef.current;
           
-          const SPIRAL_OUT_END = 0.3; // 0-3s
-          const ORBIT_END = 0.7; // 3-7s
+          const PHASE1_END = 0.4; // 0-4s
+          const PHASE2_END = 0.8; // 4-8s
           
           let currentRadius, angle;
-          
-          if (easedProgress < SPIRAL_OUT_END) {
-            // Phase 1: Spiral Out
-            const phaseProgress = easedProgress / SPIRAL_OUT_END;
+
+          if (easedProgress < PHASE1_END) {
+            // Phase 1: 180 deg spiral out (4s)
+            const phaseProgress = easedProgress / PHASE1_END;
             currentRadius = maxAngle * phaseProgress;
-            angle = phaseProgress * Math.PI * 2;
-          } else if (easedProgress < ORBIT_END) {
-            // Phase 2: Orbit at max radius
-            const phaseProgress = (easedProgress - SPIRAL_OUT_END) / (ORBIT_END - SPIRAL_OUT_END);
+            angle = phaseProgress * Math.PI; // 180 deg
+          } else if (easedProgress < PHASE2_END) {
+            // Phase 2: 360 deg orbit at max radius (4s)
+            const phaseProgress = (easedProgress - PHASE1_END) / (PHASE2_END - PHASE1_END);
             currentRadius = maxAngle;
-            angle = Math.PI * 2 + (phaseProgress * Math.PI * 2);
+            angle = Math.PI + (phaseProgress * Math.PI * 2); // 180 + 360 deg
           } else {
-            // Phase 3: Spiral In
-            const phaseProgress = (easedProgress - ORBIT_END) / (1.0 - ORBIT_END);
+            // Phase 3: 180 deg spiral in (2s)
+            const phaseProgress = (easedProgress - PHASE2_END) / (1.0 - PHASE2_END);
             currentRadius = maxAngle * (1 - phaseProgress);
-            angle = Math.PI * 4 + (phaseProgress * Math.PI * 2);
+            angle = Math.PI * 3 + (phaseProgress * Math.PI); // 540 + 180 deg = 720 deg
           }
+
+          angle *= -1; // Reverse direction
           
           meshRef.current.rotation.y = Math.sin(angle) * currentRadius;
           meshRef.current.rotation.x = Math.cos(angle) * currentRadius;
@@ -812,5 +814,6 @@ DepthWeaverScene.displayName = 'DepthWeaverScene';
     
 
     
+
 
 
