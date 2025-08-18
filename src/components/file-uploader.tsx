@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import type { Pipeline } from '@huggingface/transformers';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface FileUploaderProps {
     onFilesSelected: (image: File, depthMap: File) => void;
@@ -183,6 +184,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const [isLocalGenerating, setIsLocalGenerating] = useState(false);
     const [localModelStatus, setLocalModelStatus] = useState('未下载');
     const pipelineRef = useRef<Pipeline | null>(null);
+    const modelNameRef = useRef('onnx-community/depth-anything-v2-small');
+    const [localModelName, setLocalModelName] = useState('onnx-community/depth-anything-v2-small');
 
     useEffect(() => {
         try {
@@ -191,20 +194,28 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             
             const savedUseLocal = localStorage.getItem('useLocalGenerator');
             if(savedUseLocal) setUseLocalGenerator(JSON.parse(savedUseLocal));
+
+            const savedModelName = localStorage.getItem('localModelName');
+            if (savedModelName) {
+                setLocalModelName(savedModelName);
+                modelNameRef.current = savedModelName;
+            }
             
         } catch (error) {
             console.error("Failed to read from localStorage", error);
         }
     }, []);
 
-    const initializeLocalGenerator = useCallback(async () => {
-        if (pipelineRef.current) return;
+    const initializeLocalGenerator = useCallback(async (model: string) => {
+        if (pipelineRef.current && modelNameRef.current === model) return;
 
+        modelNameRef.current = model;
+        pipelineRef.current = null;
         setLocalModelStatus('正在准备环境...');
         try {
             const { pipeline } = await import('@huggingface/transformers');
 
-            pipelineRef.current = await pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small', {
+            pipelineRef.current = await pipeline('depth-estimation', model, {
                 progress_callback: (progress: any) => {
                      if (progress.status === 'progress') {
                         const percentage = (progress.progress).toFixed(2);
@@ -226,16 +237,25 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     }, []);
 
     useEffect(() => {
-        if (useLocalGenerator && !pipelineRef.current) {
-            initializeLocalGenerator();
+        if (useLocalGenerator) {
+            initializeLocalGenerator(localModelName);
         }
-    }, [useLocalGenerator, initializeLocalGenerator]);
+    }, [useLocalGenerator, localModelName, initializeLocalGenerator]);
 
     
     const handleUseLocalChange = (checked: boolean) => {
         setUseLocalGenerator(checked);
         try {
             localStorage.setItem('useLocalGenerator', JSON.stringify(checked));
+        } catch (error) {
+            console.error("Failed to write to localStorage", error);
+        }
+    }
+
+    const handleLocalModelChange = (model: string) => {
+        setLocalModelName(model);
+        try {
+            localStorage.setItem('localModelName', model);
         } catch (error) {
             console.error("Failed to write to localStorage", error);
         }
@@ -259,56 +279,59 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         if (!imageFile) return;
         if (!pipelineRef.current) {
             toast({ variant: "destructive", title: "本地模型未就绪", description: "请等待模型下载完成或检查设置。" });
-            initializeLocalGenerator();
+            initializeLocalGenerator(localModelName);
             return;
         }
 
         setIsLocalGenerating(true);
         setLocalModelStatus('正在生成深度图...');
         
-        try {
-            const imageUrl = URL.createObjectURL(imageFile);
-            const { depth } = await pipelineRef.current(imageUrl) as any;
-            URL.revokeObjectURL(imageUrl);
-            
-            const canvas = document.createElement('canvas');
-            canvas.width = depth.width;
-            canvas.height = depth.height;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) throw new Error('Could not get canvas context');
-            
-            const rgbaData = new Uint8ClampedArray(depth.width * depth.height * 4);
-            for (let i = 0; i < depth.data.length; ++i) {
-                const depthValue = depth.data[i];
-                rgbaData[i * 4] = depthValue;
-                rgbaData[i * 4 + 1] = depthValue;
-                rgbaData[i * 4 + 2] = depthValue;
-                rgbaData[i * 4 + 3] = 255;
-            }
-
-            const imageData = new ImageData(rgbaData, depth.width, depth.height);
-            ctx.putImageData(imageData, 0, 0);
-
-            canvas.toBlob((blob) => {
-                if (blob) {
-                    const generatedFile = new File([blob], "generated-depth-map.png", { type: "image/png" });
-                    setDepthMapFile(generatedFile);
-                    toast({ title: "成功", description: "深度图已在本地生成并载入。" });
-                } else {
-                    throw new Error("Canvas to Blob conversion failed.");
+        // Use a short timeout to allow the UI to update before the heavy computation
+        setTimeout(async () => {
+            try {
+                const imageUrl = URL.createObjectURL(imageFile);
+                const { depth } = await pipelineRef.current(imageUrl) as any;
+                URL.revokeObjectURL(imageUrl);
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = depth.width;
+                canvas.height = depth.height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Could not get canvas context');
+                
+                const rgbaData = new Uint8ClampedArray(depth.width * depth.height * 4);
+                for (let i = 0; i < depth.data.length; ++i) {
+                    const depthValue = depth.data[i];
+                    rgbaData[i * 4] = depthValue;
+                    rgbaData[i * 4 + 1] = depthValue;
+                    rgbaData[i * 4 + 2] = depthValue;
+                    rgbaData[i * 4 + 3] = 255;
                 }
+
+                const imageData = new ImageData(rgbaData, depth.width, depth.height);
+                ctx.putImageData(imageData, 0, 0);
+
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const generatedFile = new File([blob], "generated-depth-map.png", { type: "image/png" });
+                        setDepthMapFile(generatedFile);
+                        toast({ title: "成功", description: "深度图已在本地生成并载入。" });
+                    } else {
+                        throw new Error("Canvas to Blob conversion failed.");
+                    }
+                    setIsLocalGenerating(false);
+                    setLocalModelStatus('就绪');
+                }, 'image/png');
+
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error("Local depth map generation failed:", error);
+                toast({ variant: "destructive", title: "本地生成失败", description: errorMessage });
                 setIsLocalGenerating(false);
                 setLocalModelStatus('就绪');
-            }, 'image/png');
-
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error("Local depth map generation failed:", error);
-            toast({ variant: "destructive", title: "本地生成失败", description: errorMessage });
-            setIsLocalGenerating(false);
-            setLocalModelStatus('就绪');
-        }
-    }, [imageFile, toast, initializeLocalGenerator]);
+            }
+        }, 0);
+    }, [imageFile, toast, initializeLocalGenerator, localModelName]);
     
     const handleRemoteGenerateDepthMap = async (currentApiUrl: string) => {
         if (!imageFile) return;
@@ -454,6 +477,21 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                      <p className="text-sm text-muted-foreground">
                         启用此选项后，生成深度图功能将完全在浏览器本地进行，生成过程中设备内存占用会短暂升高，根据处理器性能单张处理时长可能在几秒到十几秒不等。首次使用此功能需要连接到国际互联网下载模型。
                     </p>
+                    {useLocalGenerator && (
+                        <div className="space-y-2">
+                            <Label htmlFor="local-model-select">本地模型选择</Label>
+                             <Select value={localModelName} onValueChange={handleLocalModelChange}>
+                                <SelectTrigger id="local-model-select">
+                                    <SelectValue placeholder="选择一个模型" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="onnx-community/depth-anything-v2-small">Small (最快)</SelectItem>
+                                    <SelectItem value="onnx-community/depth-anything-v2-base">Base (默认)</SelectItem>
+                                    <SelectItem value="onnx-community/depth-anything-v2-large">Large (效果最好)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                     <div className="text-sm">
                         <span className="font-semibold">离线模型下载状态:</span> <span className="text-muted-foreground">{localModelStatus}</span>
                     </div>
@@ -509,3 +547,5 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
