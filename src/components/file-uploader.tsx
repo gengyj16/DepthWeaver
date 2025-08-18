@@ -425,12 +425,12 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     };
 
     const helpDialogContent = (
-         <DialogContent className="sm:max-w-[525px]">
+         <DialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="sm:max-w-[525px]">
             <DialogHeader>
                 <DialogTitle>关于“生成深度图”</DialogTitle>
                 <DialogDescription asChild>
                    <div>
-                        此功能将照片发送到API地址进行处理，这是一个开源模型，你也可以查阅
+                        此功能将照片发送到以下API地址进行处理，这是一个开源模型，你也可以查阅
                         <a 
                             href="https://huggingface.co/spaces/depth-anything/Depth-Anything-V2" 
                             target="_blank" 
@@ -534,4 +534,3 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     );
 }
 
-    
