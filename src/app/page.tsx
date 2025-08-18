@@ -249,7 +249,7 @@ export default function HomePage() {
                         {isRecording ? '录制中...' : '录制'}
                     </Button>
                 </div>
-                <Button variant="outline" onClick={handleReset} className="bg-background/20 hover:bg-muted/30 backdrop-blur-sm border-white/10">
+                <Button variant="outline" onClick={handleReset} disabled={isRecording} className="bg-background/20 hover:bg-muted/30 backdrop-blur-sm border-white/10">
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   返回
                 </Button>
@@ -307,7 +307,7 @@ export default function HomePage() {
             </AlertDialog>
 
 
-            <div className={cn("absolute bottom-6 right-6 z-20 transition-opacity", isSettingsOpen && "opacity-0 pointer-events-none")}>
+            <div className={cn("absolute bottom-6 right-6 z-20 transition-opacity", (isSettingsOpen || isRecording) && "opacity-0 pointer-events-none")}>
                <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" size="icon" className="rounded-full h-12 w-12 bg-background/20 hover:bg-muted/30 backdrop-blur-sm shadow-lg border-white/10">
@@ -328,7 +328,7 @@ export default function HomePage() {
                           id="sensor-mode"
                           checked={useSensor}
                           onCheckedChange={setUseSensor}
-                          disabled={!sensorSupported}
+                          disabled={!sensorSupported || isRecording}
                         />
                       </div>
                       {!sensorSupported && <p className="text-xs text-center text-destructive">您的设备不支持方向传感器。</p>}

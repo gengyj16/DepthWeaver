@@ -197,6 +197,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
   const renderRequestedRef = useRef(false);
   const useSensorRef = useRef(useSensor);
+  const isRecordingRef = useRef(false);
 
   useEffect(() => {
     useSensorRef.current = useSensor;
@@ -350,104 +351,116 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       }
     },
     async startRecording(duration: number) {
-      if (!mountRef.current || !rendererRef.current || !meshRef.current) {
-        throw new Error('Recording is not ready.');
-      }
-      
-      const TARGET_FPS = 30;
-      const totalFrames = duration / 1000 * TARGET_FPS;
-      const canvas = rendererRef.current.domElement;
-      
-      const stream = canvas.captureStream(TARGET_FPS);
-      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
-    
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
+        if (!mountRef.current || !rendererRef.current || !meshRef.current || isRecordingRef.current) {
+            throw new Error('Recording is not ready or already in progress.');
         }
-      };
-      
-      const originalRotation = meshRef.current.rotation.clone();
-      
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `recording-${Date.now()}.webm`;
-        a.click();
-        URL.revokeObjectURL(url);
-        stream.getTracks().forEach(track => track.stop());
-        if(meshRef.current) {
-            meshRef.current.rotation.copy(originalRotation);
-            requestRenderIfNotRequested();
-        }
-      };
-    
-      recorder.onerror = (e) => {
-        console.error('MediaRecorder error:', e);
-        if(meshRef.current) {
-            meshRef.current.rotation.copy(originalRotation);
-        }
-        throw new Error('MediaRecorder encountered an error.');
-      };
-      
-      if(meshRef.current) {
-          meshRef.current.rotation.set(0,0,0);
-          requestRenderIfNotRequested();
-      }
-      
-      recorder.start();
-      
-      for (let i = 0; i < totalFrames; i++) {
-        await new Promise(resolve => setTimeout(resolve, 0)); // Yield to the event loop
-        
-        if (!meshRef.current) break;
 
-        const linearProgress = i / (totalFrames - 1);
+        isRecordingRef.current = true;
+        const TARGET_FPS = 30;
+        const totalFrames = duration / 1000 * TARGET_FPS;
+        const canvas = rendererRef.current.domElement;
         
-        const panToSideDuration = 2000;
-        const orbitDuration = 6000;
-        const returnToCenterDuration = 2000;
-        const totalAnimationDuration = panToSideDuration + orbitDuration + returnToCenterDuration;
+        const stream = canvas.captureStream(TARGET_FPS);
+        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
         
-        const scaledDuration = duration / totalAnimationDuration;
-        const panEndProgress = (panToSideDuration * scaledDuration) / duration;
-        const orbitEndProgress = ((panToSideDuration + orbitDuration) * scaledDuration) / duration;
-        
-        const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
-        const easedProgress = easeInOutSine(linearProgress);
-        
-        const maxAngle = maxAngleRef.current;
-        let currentX, currentY;
+        const originalRotation = meshRef.current.rotation.clone();
 
-        if (easedProgress < panEndProgress) {
-            const phaseProgress = easedProgress / panEndProgress;
-            currentY = THREE.MathUtils.lerp(0, -maxAngle, phaseProgress);
-            currentX = 0;
-        } else if (easedProgress < orbitEndProgress) {
-            const phaseProgress = (easedProgress - panEndProgress) / (orbitEndProgress - panEndProgress);
-            const angle = Math.PI + phaseProgress * Math.PI * 2;
-            currentY = Math.cos(angle) * maxAngle;
-            currentX = Math.sin(angle) * maxAngle;
-        } else {
-            const phaseProgress = (easedProgress - orbitEndProgress) / (1 - orbitEndProgress);
-            const fromY = -maxAngle;
-            const fromX = 0;
-            currentY = THREE.MathUtils.lerp(fromY, 0, phaseProgress);
-            currentX = THREE.MathUtils.lerp(fromX, 0, phaseProgress);
+        const animateAndRecord = async () => {
+            return new Promise<void>((resolve, reject) => {
+                const chunks: Blob[] = [];
+                recorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        chunks.push(e.data);
+                    }
+                };
+
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `recording-${Date.now()}.webm`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    stream.getTracks().forEach(track => track.stop());
+                    resolve();
+                };
+
+                recorder.onerror = (e) => {
+                    console.error('MediaRecorder error:', e);
+                    stream.getTracks().forEach(track => track.stop());
+                    reject(new Error('MediaRecorder encountered an error.'));
+                };
+
+                const runAnimation = async () => {
+                    if (meshRef.current) {
+                        meshRef.current.rotation.set(0, 0, 0);
+                        requestRenderIfNotRequested();
+                    }
+                    
+                    recorder.start();
+
+                    for (let i = 0; i < totalFrames; i++) {
+                        if (!meshRef.current || !isRecordingRef.current) break;
+
+                        const linearProgress = i / (totalFrames - 1);
+                        const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
+                        const easedProgress = easeInOutSine(linearProgress);
+                        
+                        const maxAngle = maxAngleRef.current;
+                        let currentRadius, angle;
+                        
+                        const SPIRAL_OUT_END = 0.3; // 3s
+                        const ORBIT_END = 0.7; // 4s
+                        
+                        if (easedProgress < SPIRAL_OUT_END) {
+                            // Phase 1: Spiral Out
+                            const phaseProgress = easedProgress / SPIRAL_OUT_END;
+                            currentRadius = maxAngle * phaseProgress;
+                            angle = phaseProgress * Math.PI * 2;
+                        } else if (easedProgress < ORBIT_END) {
+                            // Phase 2: Orbit at max radius
+                            const phaseProgress = (easedProgress - SPIRAL_OUT_END) / (ORBIT_END - SPIRAL_OUT_END);
+                            currentRadius = maxAngle;
+                            angle = Math.PI * 2 + (phaseProgress * Math.PI * 2);
+                        } else {
+                            // Phase 3: Spiral In
+                            const phaseProgress = (easedProgress - ORBIT_END) / (1.0 - ORBIT_END);
+                            currentRadius = maxAngle * (1 - phaseProgress);
+                            angle = Math.PI * 4 + (phaseProgress * Math.PI * 2);
+                        }
+                        
+                        meshRef.current.rotation.y = Math.sin(angle) * currentRadius;
+                        meshRef.current.rotation.x = Math.cos(angle) * currentRadius;
+                        
+                        if (rendererRef.current && sceneRef.current && cameraRef.current) {
+                          rendererRef.current.render(sceneRef.current, cameraRef.current);
+                        }
+                        // Yield to the event loop to allow frame to be painted and captured
+                        await new Promise(resolve => setTimeout(resolve, 0)); 
+                    }
+                    
+                    if (recorder.state === "recording") {
+                       recorder.stop();
+                    }
+                }
+                
+                runAnimation().catch(reject);
+            });
+        };
+
+        try {
+            await animateAndRecord();
+        } catch (error) {
+            console.error("Recording failed:", error);
+            throw error; // Re-throw to be caught by the caller
+        } finally {
+            if (meshRef.current) {
+                meshRef.current.rotation.copy(originalRotation);
+                requestRenderIfNotRequested();
+            }
+            isRecordingRef.current = false;
         }
-        
-        meshRef.current.rotation.y = currentY;
-        meshRef.current.rotation.x = currentX;
-        
-        if (rendererRef.current && sceneRef.current && cameraRef.current) {
-          rendererRef.current.render(sceneRef.current, cameraRef.current);
-        }
-      }
-      
-      recorder.stop();
     },
   }));
 
@@ -539,7 +552,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   }, [onPointerMove]);
   
   const onPointerDown = useCallback((event: PointerEvent) => {
-      if(useSensorRef.current) return;
+      if(useSensorRef.current || isRecordingRef.current) return;
       event.preventDefault();
       isDraggingRef.current = true;
       previousPointerPosition.current.x = event.clientX;
@@ -550,7 +563,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   }, [onPointerMove, onPointerUp]);
 
   const handleDeviceOrientation = useCallback((event: DeviceOrientationEvent) => {
-      if (!meshRef.current || !event.beta || !event.gamma || !useSensorRef.current) return;
+      if (!meshRef.current || !event.beta || !event.gamma || !useSensorRef.current || isRecordingRef.current) return;
   
       if (initialOrientationRef.current.beta === null || initialOrientationRef.current.gamma === null) {
         initialOrientationRef.current = { beta: event.beta, gamma: event.gamma };
@@ -573,7 +586,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
   const onWheel = useCallback((event: WheelEvent) => {
     event.preventDefault();
-    if (!cameraRef.current) return;
+    if (!cameraRef.current || isRecordingRef.current) return;
 
     const zoomSpeed = 0.002;
     const delta = event.deltaY * zoomSpeed;
@@ -606,7 +619,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       if(currentMount) currentMount.style.cursor = 'default';
     } else {
       initialOrientationRef.current = { beta: null, gamma: null };
-      if (meshRef.current) {
+      if (meshRef.current && !isRecordingRef.current) {
         meshRef.current.rotation.x = 0;
         meshRef.current.rotation.y = 0;
         requestRenderIfNotRequested();
@@ -718,6 +731,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     currentMount.style.cursor = useSensor ? 'default' : 'grab';
 
     const handleResize = () => {
+      if (!mountRef.current) return;
       const width = currentMount.clientWidth;
       const height = currentMount.clientHeight;
       renderer.setSize(width, height);
@@ -743,6 +757,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
     return () => {
       isCancelled = true;
+      isRecordingRef.current = false; // Stop any recording on unmount
       window.removeEventListener('resize', handleResize);
       currentMount.removeEventListener('pointerdown', onPointerDown);
       currentMount.removeEventListener('wheel', onWheel);
@@ -801,4 +816,3 @@ DepthWeaverScene.displayName = 'DepthWeaverScene';
     
 
     
-
