@@ -248,12 +248,11 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         const bakingMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), tempBakingMaterial);
         bakingScene.add(bakingMesh);
 
-        // --- Start of Chroma Key Change ---
         const originalClearColor = new THREE.Color();
         renderer.getClearColor(originalClearColor);
         const originalClearAlpha = renderer.getClearAlpha();
         
-        renderer.setClearColor('#00ff00'); // Set to green
+        renderer.setClearColor('#00ff00');
         renderer.setClearAlpha(1);
         
         renderer.setRenderTarget(tempRenderTarget);
@@ -261,10 +260,8 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         renderer.render(bakingScene, new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1));
         renderer.setRenderTarget(null);
 
-        // Restore original clear color
         renderer.setClearColor(originalClearColor);
         renderer.setClearAlpha(originalClearAlpha);
-        // --- End of Chroma Key Change ---
 
         bakingMesh.geometry.dispose();
         bakingScene.remove(bakingMesh);
@@ -400,7 +397,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       const frustumSize = 2;
       newCamera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 0.1, 100);
       newCamera.zoom = orthographicZoom;
-      newCamera.position.z = 2;
+      newCamera.position.z = 6;
     }
     newCamera.updateProjectionMatrix();
     cameraRef.current = newCamera;
@@ -513,7 +510,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         const frustumSize = 2;
         camera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 0.1, 100);
         camera.zoom = orthographicZoom;
-        camera.position.z = 2;
+        camera.position.z = 6;
         camera.updateProjectionMatrix();
     }
     cameraRef.current = camera;
@@ -657,4 +654,5 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 DepthWeaverScene.displayName = 'DepthWeaverScene';
 
     
+
 
