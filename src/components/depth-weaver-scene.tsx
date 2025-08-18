@@ -393,7 +393,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
         const startTime = Date.now();
         
-        // Reset rotation before starting
         if(meshRef.current) {
             meshRef.current.rotation.set(0,0,0);
         }
@@ -411,40 +410,43 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
         const animateAndRecord = () => {
           const elapsedTime = Date.now() - startTime;
-          if (!meshRef.current) return;
-          
+          if (!meshRef.current) {
+            if (recorder.state === 'recording') recorder.stop();
+            return;
+          }
+
           if (elapsedTime >= duration) {
             if (recorder.state === 'recording') {
-              recorder.stop();
+               // Ensure the final frame is rendered before stopping
+               requestRenderIfNotRequested();
+               recorder.stop();
             }
             if (animationFrameIdRef.current) {
-              cancelAnimationFrame(animationFrameIdRef.current);
+                cancelAnimationFrame(animationFrameIdRef.current);
             }
             return;
           }
           
-          // Phase 1: Pan to left
           if (elapsedTime < scaledPanDuration) {
               const progress = elapsedTime / scaledPanDuration;
               meshRef.current.rotation.y = THREE.MathUtils.lerp(0, -maxAngle, progress);
               meshRef.current.rotation.x = 0;
           }
-          // Phase 2: Circular orbit
           else if (elapsedTime < scaledPanDuration + scaledOrbitDuration) {
               const orbitElapsedTime = elapsedTime - scaledPanDuration;
               const orbitProgress = orbitElapsedTime / scaledOrbitDuration;
-              // Full circle (2*PI) starting from the left (-PI)
-              const angle = -Math.PI + orbitProgress * Math.PI * 2;
+              const angle = -Math.PI / 2 + orbitProgress * Math.PI * 2;
               meshRef.current.rotation.y = Math.cos(angle) * maxAngle;
               meshRef.current.rotation.x = Math.sin(angle) * maxAngle;
           }
-          // Phase 3: Return to center
           else {
               const returnElapsedTime = elapsedTime - (scaledPanDuration + scaledOrbitDuration);
               const returnProgress = returnElapsedTime / scaledReturnDuration;
-              // Lerp from the final orbit position (left side) back to center
-              meshRef.current.rotation.y = THREE.MathUtils.lerp(-maxAngle, 0, returnProgress);
-              meshRef.current.rotation.x = THREE.MathUtils.lerp(0, 0, returnProgress); // y is 0 at the end of orbit
+              const fromY = Math.cos(-Math.PI/2 + Math.PI*2) * maxAngle;
+              const fromX = Math.sin(-Math.PI/2 + Math.PI*2) * maxAngle;
+
+              meshRef.current.rotation.y = THREE.MathUtils.lerp(fromY, 0, returnProgress);
+              meshRef.current.rotation.x = THREE.MathUtils.lerp(fromX, 0, returnProgress);
           }
 
           requestRenderIfNotRequested();
