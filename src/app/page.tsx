@@ -187,6 +187,16 @@ export default function HomePage() {
     setScrollAreaKey(Date.now());
   };
 
+  const handleMeshDetailChange = (value: string) => {
+    const newDetail = Number(value);
+    if (meshDetail === newDetail) return;
+    if (scrollAreaRef.current) {
+      scrollPositionRef.current = scrollAreaRef.current.scrollTop;
+    }
+    setMeshDetail(newDetail);
+    setScrollAreaKey(Date.now());
+  };
+
   const isSceneVisible = image && depthMap;
 
   return (
@@ -461,7 +471,7 @@ export default function HomePage() {
                           <Label className="text-center">网格细节</Label>
                           <RadioGroup 
                             value={String(meshDetail)} 
-                            onValueChange={(value) => setMeshDetail(Number(value))} 
+                            onValueChange={handleMeshDetailChange} 
                             className="grid grid-cols-3 gap-2"
                           >
                             {[512, 1024, 2048].map(detail => (
@@ -498,6 +508,8 @@ export default function HomePage() {
     </main>
   );
 }
+
+    
 
     
 
