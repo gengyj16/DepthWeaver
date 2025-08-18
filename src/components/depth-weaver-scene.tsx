@@ -362,89 +362,72 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       const originalRotation = meshRef.current.rotation.clone();
 
       const animateAndRecord = async () => {
-        const TARGET_FPS = 30;
-        const totalFrames = duration / 1000 * TARGET_FPS;
-        const canvas = rendererRef.current!.domElement;
-        const stream = canvas.captureStream(TARGET_FPS);
-        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
-        
-        const recordingPromise = new Promise<void>((resolve, reject) => {
-            const chunks: Blob[] = [];
-            recorder.ondataavailable = (e) => {
-                if (e.data.size > 0) chunks.push(e.data);
-            };
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `recording-${Date.now()}.webm`;
-                a.click();
-                URL.revokeObjectURL(url);
-                stream.getTracks().forEach(track => track.stop());
-                resolve();
-            };
-            recorder.onerror = (e) => {
-                console.error('MediaRecorder error:', e);
-                stream.getTracks().forEach(track => track.stop());
-                reject(new Error('MediaRecorder encountered an error.'));
-            };
-        });
+          const TARGET_FPS = 30;
+          const totalFrames = duration / 1000 * TARGET_FPS;
+          const canvas = rendererRef.current!.domElement;
+          const stream = canvas.captureStream(TARGET_FPS);
+          const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+      
+          const recordingPromise = new Promise<void>((resolve, reject) => {
+              const chunks: Blob[] = [];
+              recorder.ondataavailable = (e) => {
+                  if (e.data.size > 0) chunks.push(e.data);
+              };
+              recorder.onstop = () => {
+                  const blob = new Blob(chunks, { type: 'video/webm' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `recording-${Date.now()}.webm`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  stream.getTracks().forEach(track => track.stop());
+                  resolve();
+              };
+              recorder.onerror = (e) => {
+                  console.error('MediaRecorder error:', e);
+                  stream.getTracks().forEach(track => track.stop());
+                  reject(new Error('MediaRecorder encountered an error.'));
+              };
+          });
 
-        recorder.start();
+          recorder.start();
 
-        if (meshRef.current) {
-          meshRef.current.rotation.set(0, 0, 0);
-          requestRenderIfNotRequested();
-        }
-        
-        for (let i = 0; i < totalFrames; i++) {
-          if (!meshRef.current) break;
-
-          const linearProgress = i / (totalFrames - 1);
-          const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
-          const easedProgress = easeInOutSine(linearProgress);
-          
-          const maxAngle = maxAngleRef.current;
-          
-          const PHASE1_END = 0.4; // 0-4s
-          const PHASE2_END = 0.8; // 4-8s
-          
-          let currentRadius, angle;
-
-          if (easedProgress < PHASE1_END) {
-            // Phase 1: 180 deg spiral out (4s)
-            const phaseProgress = easedProgress / PHASE1_END;
-            currentRadius = maxAngle * phaseProgress;
-            angle = phaseProgress * Math.PI; // 180 deg
-          } else if (easedProgress < PHASE2_END) {
-            // Phase 2: 360 deg orbit at max radius (4s)
-            const phaseProgress = (easedProgress - PHASE1_END) / (PHASE2_END - PHASE1_END);
-            currentRadius = maxAngle;
-            angle = Math.PI + (phaseProgress * Math.PI * 2); // 180 + 360 deg
-          } else {
-            // Phase 3: 180 deg spiral in (2s)
-            const phaseProgress = (easedProgress - PHASE2_END) / (1.0 - PHASE2_END);
-            currentRadius = maxAngle * (1 - phaseProgress);
-            angle = Math.PI * 3 + (phaseProgress * Math.PI); // 540 + 180 deg = 720 deg
+          if (meshRef.current) {
+            meshRef.current.rotation.set(0, 0, 0);
+            requestRenderIfNotRequested();
           }
+      
+          for (let i = 0; i < totalFrames; i++) {
+              if (!meshRef.current) break;
 
-          angle *= -1; // Reverse direction
-          
-          meshRef.current.rotation.y = Math.sin(angle) * currentRadius;
-          meshRef.current.rotation.x = Math.cos(angle) * currentRadius;
-          
-          if (rendererRef.current && sceneRef.current && cameraRef.current) {
-            rendererRef.current.render(sceneRef.current, cameraRef.current);
+              const linearProgress = i / (totalFrames - 1);
+              
+              const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
+              const easedProgress = easeInOutSine(linearProgress);
+              
+              const maxAngle = maxAngleRef.current;
+              
+              // Calculate radius: starts at 0, goes to maxAngle, then back to 0
+              const radius = Math.sin(linearProgress * Math.PI) * maxAngle;
+              
+              // Calculate angle: spins 720 degrees (2 full circles)
+              const angle = easedProgress * Math.PI * 4;
+
+              meshRef.current.rotation.y = Math.sin(angle) * radius;
+              meshRef.current.rotation.x = Math.cos(angle) * radius;
+              
+              if (rendererRef.current && sceneRef.current && cameraRef.current) {
+                rendererRef.current.render(sceneRef.current, cameraRef.current);
+              }
+              await new Promise(resolve => setTimeout(resolve, 33));
           }
-          await new Promise(resolve => setTimeout(resolve, 33));
-        }
-        
-        if (recorder.state === "recording") {
-          recorder.stop();
-        }
-        
-        return recordingPromise;
+      
+          if (recorder.state === "recording") {
+              recorder.stop();
+          }
+      
+          return recordingPromise;
       };
 
       try {
@@ -802,18 +785,3 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   );
 });
 DepthWeaverScene.displayName = 'DepthWeaverScene';
-
-    
-
-
-
-
-
-    
-
-    
-
-    
-
-
-
