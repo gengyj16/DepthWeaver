@@ -452,9 +452,14 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       const gamma = event.gamma - initialOrientationRef.current.gamma;
 
       const maxAngle = maxAngleRef.current;
+      const smoothingFactor = 0.1;
+
+      const targetRotationX = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(beta * -0.5), -maxAngle, maxAngle);
+      const targetRotationY = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(gamma * -0.5), -maxAngle, maxAngle);
       
-      meshRef.current.rotation.x = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(beta * -0.5), -maxAngle, maxAngle);
-      meshRef.current.rotation.y = THREE.MathUtils.clamp(THREE.MathUtils.degToRad(gamma * -0.5), -maxAngle, maxAngle);
+      meshRef.current.rotation.x += (targetRotationX - meshRef.current.rotation.x) * smoothingFactor;
+      meshRef.current.rotation.y += (targetRotationY - meshRef.current.rotation.y) * smoothingFactor;
+      
       requestRenderIfNotRequested();
   }, [requestRenderIfNotRequested]);
 
@@ -681,3 +686,6 @@ DepthWeaverScene.displayName = 'DepthWeaverScene';
 
 
 
+
+
+    
