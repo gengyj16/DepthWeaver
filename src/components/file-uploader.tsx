@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, ChangeEvent, DragEvent, ReactNode, useEffect } from 'react';
+import { useState, ChangeEvent, DragEvent, ReactNode, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 
 interface FileUploaderProps {
@@ -24,14 +26,12 @@ interface FileInputBoxProps {
     description: string;
     icon: ReactNode;
     showGenerateButton?: boolean;
-    onGenerateClick?: (apiUrl: string) => void;
+    onGenerateClick?: (useLocal: boolean) => void;
     isGenerating?: boolean;
-    apiUrl?: string;
-    setApiUrl?: (url: string) => void;
-    defaultApiUrl?: string;
+    isLocalGenerating?: boolean;
 }
 
-const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon, showGenerateButton, onGenerateClick, isGenerating, apiUrl, setApiUrl, defaultApiUrl }: FileInputBoxProps) => {
+const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon, showGenerateButton, onGenerateClick, isGenerating, isLocalGenerating }: FileInputBoxProps) => {
     const [isDragging, setIsDragging] = useState(false);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -86,67 +86,21 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
                     {description && !showGenerateButton && (
                          <p className="text-xs text-muted-foreground">{description}</p>
                     )}
-                    {showGenerateButton && onGenerateClick && apiUrl !== undefined && setApiUrl && defaultApiUrl && (
-                        <>
-                            <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => onGenerateClick(apiUrl || defaultApiUrl)} 
-                                disabled={!acceptedFile || isGenerating}
-                                className="text-xs"
-                            >
-                                {isGenerating ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                    <Sparkles className="mr-2 h-4 w-4" />
-                                )}
-                                生成深度图
-                            </Button>
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6">
-                                        <HelpCircle className="h-4 w-4" />
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>关于“生成深度图”</DialogTitle>
-                                        <DialogDescription asChild>
-                                           <div>
-                                                此功能将照片发送到以下API地址进行处理，这是一个开源模型，你也可以查阅
-                                                <a 
-                                                    href="https://huggingface.co/spaces/depth-anything/Depth-Anything-V2" 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer" 
-                                                    className="text-primary underline hover:text-primary/80"
-                                                >
-                                                    官方文档
-                                                </a>
-                                                本地部署。
-                                           </div>
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="grid gap-4 py-4">
-                                        <div className="space-y-2">
-                                            <div className="flex items-baseline gap-2">
-                                                <Label htmlFor="api-url" className="font-bold">
-                                                    高级设置:
-                                                </Label>
-                                                 <Label htmlFor="api-url" className="text-sm">
-                                                    API 地址
-                                                </Label>
-                                            </div>
-                                            <Input
-                                                id="api-url"
-                                                value={apiUrl}
-                                                onChange={(e) => setApiUrl(e.target.value)}
-                                                placeholder={defaultApiUrl}
-                                            />
-                                        </div>
-                                    </div>
-                                </DialogContent>
-                            </Dialog>
-                        </>
+                    {showGenerateButton && onGenerateClick && (
+                         <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => onGenerateClick(false)} 
+                            disabled={!acceptedFile || isGenerating || isLocalGenerating}
+                            className="text-xs"
+                        >
+                            {isGenerating ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Sparkles className="mr-2 h-4 w-4" />
+                            )}
+                            生成深度图
+                        </Button>
                     )}
                 </div>
             </div>
@@ -198,26 +152,47 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const defaultApiUrl = 'https://depth-anything-depth-anything-v2.hf.space';
     const [apiUrl, setApiUrl] = useState(defaultApiUrl);
     
+    // Local generation state
+    const [useLocalGenerator, setUseLocalGenerator] = useState(false);
+    const [isLocalGenerating, setIsLocalGenerating] = useState(false);
+    const [localModelStatus, setLocalModelStatus] = useState('未下载');
+    const [hfEndpoint, setHfEndpoint] = useState('https://hf-mirror.com');
+    const pipelineRef = useRef<any>(null);
+
     useEffect(() => {
         try {
             const savedApiUrl = localStorage.getItem('depthApiUrl');
-            if (savedApiUrl) {
-                setApiUrl(savedApiUrl);
-            }
+            if (savedApiUrl) setApiUrl(savedApiUrl);
+            
+            const savedHfEndpoint = localStorage.getItem('hfEndpoint');
+            if (savedHfEndpoint) setHfEndpoint(savedHfEndpoint);
+            else localStorage.setItem('hfEndpoint', hfEndpoint);
+
+            const savedUseLocal = localStorage.getItem('useLocalGenerator');
+            if(savedUseLocal) setUseLocalGenerator(JSON.parse(savedUseLocal));
+            
         } catch (error) {
             console.error("Failed to read from localStorage", error);
         }
     }, []);
 
-    useEffect(() => {
+    const handleHfEndpointChange = (value: string) => {
+        setHfEndpoint(value);
         try {
-            if (apiUrl !== defaultApiUrl) {
-                localStorage.setItem('depthApiUrl', apiUrl);
-            }
+            localStorage.setItem('hfEndpoint', value);
         } catch (error) {
             console.error("Failed to write to localStorage", error);
         }
-    }, [apiUrl, defaultApiUrl]);
+    }
+    
+    const handleUseLocalChange = (checked: boolean) => {
+        setUseLocalGenerator(checked);
+        try {
+            localStorage.setItem('useLocalGenerator', JSON.stringify(checked));
+        } catch (error) {
+            console.error("Failed to write to localStorage", error);
+        }
+    }
 
     const handleSubmit = async () => {
         if (imageFile && depthMapFile) {
@@ -225,7 +200,79 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         }
     };
     
-    const handleGenerateDepthMap = async (currentApiUrl: string) => {
+    const handleGenerateClick = (useLocal: boolean) => {
+        if (useLocal) {
+            handleLocalGenerateDepthMap();
+        } else {
+            handleRemoteGenerateDepthMap(apiUrl || defaultApiUrl);
+        }
+    };
+
+    const handleLocalGenerateDepthMap = useCallback(async () => {
+        if (!imageFile) return;
+
+        setIsLocalGenerating(true);
+        setLocalModelStatus('正在准备环境...');
+        
+        try {
+            if (!pipelineRef.current) {
+                const { pipeline, env } = await import('@xenova/transformers');
+                
+                if (hfEndpoint) {
+                    env.endpoint = hfEndpoint;
+                }
+                env.allowLocalModels = true;
+                env.allowRemoteModels = true;
+
+                pipelineRef.current = await pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small', {
+                    progress_callback: (progress: any) => {
+                         if (progress.status === 'progress') {
+                            const percentage = (progress.progress).toFixed(2);
+                            setLocalModelStatus(`下载中... ${percentage}% (${(progress.loaded / 1024 / 1024).toFixed(2)}MB / ${(progress.total / 1024 / 1024).toFixed(2)}MB)`);
+                        } else {
+                            setLocalModelStatus(progress.status);
+                        }
+                    }
+                });
+            }
+            
+            setLocalModelStatus('正在生成深度图...');
+            const imageUrl = URL.createObjectURL(imageFile);
+            const { depth } = await pipelineRef.current(imageUrl);
+            URL.revokeObjectURL(imageUrl);
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = depth.width;
+            canvas.height = depth.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Could not get canvas context');
+            
+            const imageData = new ImageData(new Uint8ClampedArray(depth.data), depth.width, depth.height);
+            ctx.putImageData(imageData, 0, 0);
+
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    const generatedFile = new File([blob], "generated-depth-map.png", { type: "image/png" });
+                    setDepthMapFile(generatedFile);
+                    toast({ title: "成功", description: "深度图已在本地生成并载入。" });
+                } else {
+                    throw new Error("Canvas to Blob conversion failed.");
+                }
+                setIsLocalGenerating(false);
+                setLocalModelStatus('就绪');
+            }, 'image/png');
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error("Local depth map generation failed:", error);
+            toast({ variant: "destructive", title: "本地生成失败", description: errorMessage });
+            setIsLocalGenerating(false);
+            setLocalModelStatus('失败');
+            pipelineRef.current = null; // Reset pipeline on error
+        }
+    }, [imageFile, hfEndpoint, toast]);
+    
+    const handleRemoteGenerateDepthMap = async (currentApiUrl: string) => {
         if (!imageFile) return;
 
         setIsGenerating(true);
@@ -333,9 +380,75 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     return (
         <Card className="w-full max-w-2xl bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl shadow-black/20">
             <CardHeader className="text-center relative">
-                 <div className="absolute top-4 right-4">
+                 <div className="absolute top-4 right-4 flex items-center gap-2">
+                     <Dialog>
+                        <DialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <HelpCircle className="h-5 w-5" />
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[525px]">
+                            <DialogHeader>
+                                <DialogTitle>关于“生成深度图”</DialogTitle>
+                                <DialogDescription asChild>
+                                   <div>
+                                        此功能将照片发送到API地址进行处理，这是一个开源模型，你也可以查阅
+                                        <a 
+                                            href="https://huggingface.co/spaces/depth-anything/Depth-Anything-V2" 
+                                            target="_blank" 
+                                            rel="noopener noreferrer" 
+                                            className="text-primary underline hover:text-primary/80"
+                                        >
+                                            官方文档
+                                        </a>
+                                        本地部署。
+                                   </div>
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                                <div className="space-y-2">
+                                    <div className="flex items-baseline gap-2">
+                                        <Label htmlFor="api-url" className="font-bold">
+                                            高级设置:
+                                        </Label>
+                                         <Label htmlFor="api-url" className="text-sm">
+                                            服务器API 地址
+                                        </Label>
+                                    </div>
+                                    <Input
+                                        id="api-url"
+                                        value={apiUrl}
+                                        onChange={(e) => setApiUrl(e.target.value)}
+                                        placeholder={defaultApiUrl}
+                                    />
+                                </div>
+                                <Separator className="my-4"/>
+                                <div className="space-y-4">
+                                    <div className="flex items-center space-x-2">
+                                        <Switch id="local-generation-switch" checked={useLocalGenerator} onCheckedChange={handleUseLocalChange}/>
+                                        <Label htmlFor="local-generation-switch" className="font-bold">在浏览器本地生成(beta)</Label>
+                                    </div>
+                                     <p className="text-sm text-muted-foreground">
+                                        启用此选项后，生成深度图功能将完全在浏览器本地进行，生成过程中设备内存占用会短暂升高，根据处理器性能单张处理时长可能在几秒到十几秒不等。首次使用此功能需要连接到服务器下载模型。
+                                    </p>
+                                    <div className="text-sm">
+                                        <span className="font-semibold">离线模型下载状态:</span> <span className="text-muted-foreground">{localModelStatus}</span>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="hf-endpoint" className="text-sm">HF_ENDPOINT (留空则不使用镜像)</Label>
+                                        <Input
+                                            id="hf-endpoint"
+                                            value={hfEndpoint}
+                                            onChange={(e) => handleHfEndpointChange(e.target.value)}
+                                            placeholder="https://hf-mirror.com"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </DialogContent>
+                    </Dialog>
                     <Link href="/about" passHref>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
                             <Info className="h-5 w-5" />
                         </Button>
                     </Link>
@@ -355,11 +468,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         description=""
                         icon={<FileImage className="w-10 h-10 mb-3 text-muted-foreground" />}
                         showGenerateButton={true}
-                        onGenerateClick={handleGenerateDepthMap}
-                        isGenerating={isGenerating}
-                        apiUrl={apiUrl}
-                        setApiUrl={setApiUrl}
-                        defaultApiUrl={defaultApiUrl}
+                        onGenerateClick={handleGenerateClick}
+                        isGenerating={isGenerating || isLocalGenerating}
                     />
                     <FileInputBox 
                         id="depth-map-upload" 
@@ -377,9 +487,3 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
-
-    
-
-    
-
-    
