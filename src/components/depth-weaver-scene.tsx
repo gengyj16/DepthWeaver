@@ -412,12 +412,13 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         const animateAndRecord = () => {
           const elapsedTime = Date.now() - startTime;
           const linearProgress = Math.min(elapsedTime / duration, 1);
-          const easedProgress = easeInOutSine(linearProgress);
-
+          
           if (!meshRef.current) {
             if (recorder.state === 'recording') recorder.stop();
             return;
           }
+          
+          const easedProgress = easeInOutSine(linearProgress);
 
           if (linearProgress >= 1) {
             if (recorder.state === 'recording') {
@@ -441,15 +442,16 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           } else if (easedProgress < orbitEndProgress) {
             // Phase 2: Orbit
             const phaseProgress = (easedProgress - panEndProgress) / (orbitEndProgress - panEndProgress);
-            const angle = -Math.PI / 2 + phaseProgress * Math.PI * 2;
+            const angle = Math.PI + phaseProgress * Math.PI * 2;
             currentY = Math.cos(angle) * maxAngle;
             currentX = Math.sin(angle) * maxAngle;
           } else {
             // Phase 3: Return to center
             const phaseProgress = (easedProgress - orbitEndProgress) / (1 - orbitEndProgress);
-            const fromY = Math.cos(-Math.PI / 2 + Math.PI * 2) * maxAngle;
+            const fromY = -maxAngle;
+            const fromX = 0;
             currentY = THREE.MathUtils.lerp(fromY, 0, phaseProgress);
-            currentX = 0;
+            currentX = THREE.MathUtils.lerp(fromX, 0, phaseProgress);
           }
           
           meshRef.current.rotation.y = currentY;
