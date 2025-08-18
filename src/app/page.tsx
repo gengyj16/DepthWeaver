@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { DepthWeaverScene, type DepthWeaverSceneHandle } from '@/components/depth-weaver-scene';
 import { FileUploader } from '@/components/file-uploader';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Settings, Download, Loader2 } from 'lucide-react';
+import { ArrowLeft, Settings, Download, Loader2, Video } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Switch } from "@/components/ui/switch"
@@ -65,6 +65,7 @@ export default function HomePage() {
   const [cameraType, setCameraType] = useState<CameraType>('perspective');
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [isFillWarningOpen, setIsFillWarningOpen] = useState(false);
   const [scrollAreaKey, setScrollAreaKey] = useState(Date.now());
   const sceneRef = useRef<DepthWeaverSceneHandle>(null);
@@ -162,6 +163,25 @@ export default function HomePage() {
       setIsExportDialogOpen(false);
     }
   };
+  
+  const handleRecord = async () => {
+    if (!sceneRef.current || isRecording) return;
+    setIsRecording(true);
+    toast({ title: "开始录制", description: "自动运镜动画将持续10秒。" });
+    try {
+      await sceneRef.current.startRecording(10000);
+      toast({ title: "录制成功", description: "视频已开始下载。" });
+    } catch (error) {
+       console.error("Recording failed", error);
+       toast({
+        variant: "destructive",
+        title: "录制失败",
+        description: error instanceof Error ? error.message : "发生未知错误",
+      });
+    } finally {
+       setIsRecording(false);
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -220,9 +240,13 @@ export default function HomePage() {
           <div className="relative z-10 h-full w-full">
             <header className={cn("absolute top-0 left-0 z-20 p-4 sm:p-6 w-full flex justify-between items-center transition-opacity", isSettingsOpen && "opacity-0 pointer-events-none")}>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setIsExportDialogOpen(true)} className="bg-background/20 hover:bg-muted/30 backdrop-blur-sm border-white/10">
+                    <Button variant="outline" onClick={() => setIsExportDialogOpen(true)} disabled={isRecording} className="bg-background/20 hover:bg-muted/30 backdrop-blur-sm border-white/10">
                         <Download className="mr-2 h-4 w-4" />
                         导出
+                    </Button>
+                    <Button variant="outline" onClick={handleRecord} disabled={isRecording} className="bg-background/20 hover:bg-muted/30 backdrop-blur-sm border-white/10">
+                        {isRecording ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Video className="mr-2 h-4 w-4" />}
+                        {isRecording ? '录制中...' : '录制'}
                     </Button>
                 </div>
                 <Button variant="outline" onClick={handleReset} className="bg-background/20 hover:bg-muted/30 backdrop-blur-sm border-white/10">

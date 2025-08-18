@@ -30,6 +30,7 @@ interface DepthWeaverSceneProps {
 
 export interface DepthWeaverSceneHandle {
   handleExport: (format: 'glb') => Promise<void>;
+  startRecording: (duration: number) => Promise<void>;
 }
 
 const getDepthDataFromImage = (imageUrl: string): Promise<ImageData> => {
@@ -196,6 +197,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
   const renderRequestedRef = useRef(false);
   const useSensorRef = useRef(useSensor);
+  const animationFrameIdRef = useRef<number>();
 
   useEffect(() => {
     useSensorRef.current = useSensor;
@@ -347,7 +349,72 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       } finally {
         setIsLoading(false);
       }
-    }
+    },
+    startRecording(duration: number) {
+      return new Promise<void>((resolve, reject) => {
+        if (!mountRef.current || !rendererRef.current) {
+          return reject(new Error('Recording is not ready.'));
+        }
+        const canvas = rendererRef.current.domElement;
+        const stream = canvas.captureStream(30);
+        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+
+        const chunks: Blob[] = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            chunks.push(e.data);
+          }
+        };
+
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'video/webm' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `recording-${Date.now()}.webm`;
+          a.click();
+          URL.revokeObjectURL(url);
+          stream.getTracks().forEach(track => track.stop());
+          resolve();
+        };
+
+        recorder.onerror = (e) => {
+          console.error('MediaRecorder error:', e);
+          reject(new Error('MediaRecorder encountered an error.'));
+        };
+
+        const startTime = Date.now();
+        const originalRotation = meshRef.current?.rotation.clone();
+
+        const animateAndRecord = () => {
+          const elapsedTime = Date.now() - startTime;
+          if (elapsedTime >= duration) {
+            if (recorder.state === 'recording') {
+              recorder.stop();
+            }
+            if (meshRef.current && originalRotation) {
+              meshRef.current.rotation.copy(originalRotation);
+            }
+            if (animationFrameIdRef.current) {
+              cancelAnimationFrame(animationFrameIdRef.current);
+            }
+            requestRenderIfNotRequested();
+            return;
+          }
+
+          const progress = elapsedTime / duration;
+          if (meshRef.current) {
+            meshRef.current.rotation.y = originalRotation!.y + Math.sin(progress * Math.PI) * 0.1;
+            meshRef.current.rotation.x = originalRotation!.x + Math.sin(progress * Math.PI * 2) * 0.05;
+          }
+          requestRenderIfNotRequested();
+          animationFrameIdRef.current = requestAnimationFrame(animateAndRecord);
+        };
+        
+        recorder.start();
+        animateAndRecord();
+      });
+    },
   }));
 
   useEffect(() => {
@@ -449,7 +516,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   }, [onPointerMove, onPointerUp]);
 
   const handleDeviceOrientation = useCallback((event: DeviceOrientationEvent) => {
-      if (!meshRef.current || !event.beta || !event.gamma) return;
+      if (!meshRef.current || !event.beta || !event.gamma || !useSensorRef.current) return;
   
       if (initialOrientationRef.current.beta === null || initialOrientationRef.current.gamma === null) {
         initialOrientationRef.current = { beta: event.beta, gamma: event.gamma };
@@ -525,7 +592,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
     const currentMount = mountRef.current;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -647,6 +714,10 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       currentMount.removeEventListener('wheel', onWheel);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
+      
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+      }
       
       colorTextureRef.current?.dispose();
       depthTextureRef.current?.dispose();
