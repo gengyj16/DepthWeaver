@@ -182,7 +182,6 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const [useLocalGenerator, setUseLocalGenerator] = useState(false);
     const [isLocalGenerating, setIsLocalGenerating] = useState(false);
     const [localModelStatus, setLocalModelStatus] = useState('未下载');
-    const [hfEndpoint, setHfEndpoint] = useState('https://hf-mirror.com');
     const pipelineRef = useRef<Pipeline | null>(null);
 
     useEffect(() => {
@@ -190,10 +189,6 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             const savedApiUrl = localStorage.getItem('depthApiUrl');
             if (savedApiUrl) setApiUrl(savedApiUrl);
             
-            const savedHfEndpoint = localStorage.getItem('hfEndpoint');
-            if (savedHfEndpoint) setHfEndpoint(savedHfEndpoint);
-            else localStorage.setItem('hfEndpoint', hfEndpoint);
-
             const savedUseLocal = localStorage.getItem('useLocalGenerator');
             if(savedUseLocal) setUseLocalGenerator(JSON.parse(savedUseLocal));
             
@@ -207,10 +202,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
 
         setLocalModelStatus('正在准备环境...');
         try {
-            const { pipeline, env } = await import('@huggingface/transformers');
-            
-            const endpoint = hfEndpoint || 'https://huggingface.co';
-            env.remoteHost = endpoint;
+            const { pipeline } = await import('@huggingface/transformers');
 
             pipelineRef.current = await pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small', {
                 progress_callback: (progress: any) => {
@@ -231,7 +223,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             setLocalModelStatus(`失败: ${error instanceof Error ? error.message : String(error)}`);
             pipelineRef.current = null;
         }
-    }, [hfEndpoint]);
+    }, []);
 
     useEffect(() => {
         if (useLocalGenerator && !pipelineRef.current) {
@@ -239,15 +231,6 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         }
     }, [useLocalGenerator, initializeLocalGenerator]);
 
-
-    const handleHfEndpointChange = (value: string) => {
-        setHfEndpoint(value);
-        try {
-            localStorage.setItem('hfEndpoint', value);
-        } catch (error) {
-            console.error("Failed to write to localStorage", error);
-        }
-    }
     
     const handleUseLocalChange = (checked: boolean) => {
         setUseLocalGenerator(checked);
@@ -474,19 +457,10 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         <Label htmlFor="local-generation-switch" className="font-bold">在浏览器本地生成(beta)</Label>
                     </div>
                      <p className="text-sm text-muted-foreground">
-                        启用此选项后，生成深度图功能将完全在浏览器本地进行，生成过程中设备内存占用会短暂升高，根据处理器性能单张处理时长可能在几秒到十几秒不等。首次使用此功能需要连接到服务器下载模型。
+                        启用此选项后，生成深度图功能将完全在浏览器本地进行，生成过程中设备内存占用会短暂升高，根据处理器性能单张处理时长可能在几秒到十几秒不等。首次使用此功能需要连接到国际服务器下载模型。
                     </p>
                     <div className="text-sm">
                         <span className="font-semibold">离线模型下载状态:</span> <span className="text-muted-foreground">{localModelStatus}</span>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="hf-endpoint" className="text-sm">HF_ENDPOINT (留空则不使用镜像)</Label>
-                        <Input
-                            id="hf-endpoint"
-                            value={hfEndpoint}
-                            onChange={(e) => handleHfEndpointChange(e.target.value)}
-                            placeholder="https://huggingface.co"
-                        />
                     </div>
                 </div>
             </div>
@@ -540,5 +514,3 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
-
-    
