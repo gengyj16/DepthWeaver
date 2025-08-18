@@ -29,9 +29,24 @@ interface FileInputBoxProps {
     onGenerateClick?: (useLocal: boolean) => void;
     isGenerating?: boolean;
     isLocalGenerating?: boolean;
+    showHelpButton?: boolean;
+    helpDialogContent?: ReactNode;
 }
 
-const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon, showGenerateButton, onGenerateClick, isGenerating, isLocalGenerating }: FileInputBoxProps) => {
+const FileInputBox = ({ 
+    id, 
+    onFileSelect, 
+    acceptedFile, 
+    label, 
+    description, 
+    icon, 
+    showGenerateButton, 
+    onGenerateClick, 
+    isGenerating, 
+    isLocalGenerating,
+    showHelpButton,
+    helpDialogContent
+}: FileInputBoxProps) => {
     const [isDragging, setIsDragging] = useState(false);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -101,6 +116,16 @@ const FileInputBox = ({ id, onFileSelect, acceptedFile, label, description, icon
                             )}
                             生成深度图
                         </Button>
+                    )}
+                    {showHelpButton && helpDialogContent && (
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                    <HelpCircle className="h-4 w-4" />
+                                </Button>
+                            </DialogTrigger>
+                            {helpDialogContent}
+                        </Dialog>
                     )}
                 </div>
             </div>
@@ -376,77 +401,72 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         }
     };
 
+    const helpDialogContent = (
+         <DialogContent className="sm:max-w-[525px]">
+            <DialogHeader>
+                <DialogTitle>关于“生成深度图”</DialogTitle>
+                <DialogDescription asChild>
+                   <div>
+                        此功能将照片发送到API地址进行处理，这是一个开源模型，你也可以查阅
+                        <a 
+                            href="https://huggingface.co/spaces/depth-anything/Depth-Anything-V2" 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-primary underline hover:text-primary/80"
+                        >
+                            官方文档
+                        </a>
+                        本地部署。
+                   </div>
+                </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                <div className="space-y-2">
+                    <div className="flex items-baseline gap-2">
+                        <Label htmlFor="api-url" className="font-bold">
+                            高级设置:
+                        </Label>
+                         <Label htmlFor="api-url" className="text-sm">
+                            服务器API 地址
+                        </Label>
+                    </div>
+                    <Input
+                        id="api-url"
+                        value={apiUrl}
+                        onChange={(e) => setApiUrl(e.target.value)}
+                        placeholder={defaultApiUrl}
+                    />
+                </div>
+                <Separator className="my-4"/>
+                <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                        <Switch id="local-generation-switch" checked={useLocalGenerator} onCheckedChange={handleUseLocalChange}/>
+                        <Label htmlFor="local-generation-switch" className="font-bold">在浏览器本地生成(beta)</Label>
+                    </div>
+                     <p className="text-sm text-muted-foreground">
+                        启用此选项后，生成深度图功能将完全在浏览器本地进行，生成过程中设备内存占用会短暂升高，根据处理器性能单张处理时长可能在几秒到十几秒不等。首次使用此功能需要连接到服务器下载模型。
+                    </p>
+                    <div className="text-sm">
+                        <span className="font-semibold">离线模型下载状态:</span> <span className="text-muted-foreground">{localModelStatus}</span>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="hf-endpoint" className="text-sm">HF_ENDPOINT (留空则不使用镜像)</Label>
+                        <Input
+                            id="hf-endpoint"
+                            value={hfEndpoint}
+                            onChange={(e) => handleHfEndpointChange(e.target.value)}
+                            placeholder="https://hf-mirror.com"
+                        />
+                    </div>
+                </div>
+            </div>
+        </DialogContent>
+    );
 
     return (
         <Card className="w-full max-w-2xl bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl shadow-black/20">
             <CardHeader className="text-center relative">
-                 <div className="absolute top-4 right-4 flex items-center gap-2">
-                     <Dialog>
-                        <DialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <HelpCircle className="h-5 w-5" />
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[525px]">
-                            <DialogHeader>
-                                <DialogTitle>关于“生成深度图”</DialogTitle>
-                                <DialogDescription asChild>
-                                   <div>
-                                        此功能将照片发送到API地址进行处理，这是一个开源模型，你也可以查阅
-                                        <a 
-                                            href="https://huggingface.co/spaces/depth-anything/Depth-Anything-V2" 
-                                            target="_blank" 
-                                            rel="noopener noreferrer" 
-                                            className="text-primary underline hover:text-primary/80"
-                                        >
-                                            官方文档
-                                        </a>
-                                        本地部署。
-                                   </div>
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <div className="space-y-2">
-                                    <div className="flex items-baseline gap-2">
-                                        <Label htmlFor="api-url" className="font-bold">
-                                            高级设置:
-                                        </Label>
-                                         <Label htmlFor="api-url" className="text-sm">
-                                            服务器API 地址
-                                        </Label>
-                                    </div>
-                                    <Input
-                                        id="api-url"
-                                        value={apiUrl}
-                                        onChange={(e) => setApiUrl(e.target.value)}
-                                        placeholder={defaultApiUrl}
-                                    />
-                                </div>
-                                <Separator className="my-4"/>
-                                <div className="space-y-4">
-                                    <div className="flex items-center space-x-2">
-                                        <Switch id="local-generation-switch" checked={useLocalGenerator} onCheckedChange={handleUseLocalChange}/>
-                                        <Label htmlFor="local-generation-switch" className="font-bold">在浏览器本地生成(beta)</Label>
-                                    </div>
-                                     <p className="text-sm text-muted-foreground">
-                                        启用此选项后，生成深度图功能将完全在浏览器本地进行，生成过程中设备内存占用会短暂升高，根据处理器性能单张处理时长可能在几秒到十几秒不等。首次使用此功能需要连接到服务器下载模型。
-                                    </p>
-                                    <div className="text-sm">
-                                        <span className="font-semibold">离线模型下载状态:</span> <span className="text-muted-foreground">{localModelStatus}</span>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="hf-endpoint" className="text-sm">HF_ENDPOINT (留空则不使用镜像)</Label>
-                                        <Input
-                                            id="hf-endpoint"
-                                            value={hfEndpoint}
-                                            onChange={(e) => handleHfEndpointChange(e.target.value)}
-                                            placeholder="https://hf-mirror.com"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </DialogContent>
-                    </Dialog>
+                <div className="absolute top-4 right-4 flex items-center gap-2">
                     <Link href="/about" passHref>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
                             <Info className="h-5 w-5" />
@@ -470,6 +490,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         showGenerateButton={true}
                         onGenerateClick={handleGenerateClick}
                         isGenerating={isGenerating || isLocalGenerating}
+                        showHelpButton={true}
+                        helpDialogContent={helpDialogContent}
                     />
                     <FileInputBox 
                         id="depth-map-upload" 
@@ -487,3 +509,5 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
