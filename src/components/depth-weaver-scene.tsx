@@ -352,7 +352,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     },
     startRecording(duration: number) {
       return new Promise<void>((resolve, reject) => {
-        if (!mountRef.current || !rendererRef.current) {
+        if (!mountRef.current || !rendererRef.current || !meshRef.current) {
           return reject(new Error('Recording is not ready.'));
         }
         const canvas = rendererRef.current.domElement;
@@ -384,17 +384,30 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         };
 
         const startTime = Date.now();
-        const originalRotation = meshRef.current?.rotation.clone();
+        const originalRotation = meshRef.current.rotation.clone();
+        const targetAngle = -maxAngleRef.current; 
+
+        // Define animation phases
+        const panToSideDuration = 2000; // 2 seconds
+        const orbitDuration = 6000; // 6 seconds
+        const returnToCenterDuration = 2000; // 2 seconds
+        const totalDuration = panToSideDuration + orbitDuration + returnToCenterDuration;
+        
+        // Adjust duration if user-provided duration is different
+        const scaleFactor = duration / totalDuration;
+        const scaledPanDuration = panToSideDuration * scaleFactor;
+        const scaledOrbitDuration = orbitDuration * scaleFactor;
+        const scaledReturnDuration = returnToCenterDuration * scaleFactor;
 
         const animateAndRecord = () => {
           const elapsedTime = Date.now() - startTime;
+          if (!meshRef.current) return;
+          
           if (elapsedTime >= duration) {
             if (recorder.state === 'recording') {
               recorder.stop();
             }
-            if (meshRef.current && originalRotation) {
-              meshRef.current.rotation.copy(originalRotation);
-            }
+            meshRef.current.rotation.copy(originalRotation);
             if (animationFrameIdRef.current) {
               cancelAnimationFrame(animationFrameIdRef.current);
             }
@@ -402,11 +415,31 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
             return;
           }
 
-          const progress = elapsedTime / duration;
-          if (meshRef.current) {
-            meshRef.current.rotation.y = originalRotation!.y + Math.sin(progress * Math.PI) * 0.1;
-            meshRef.current.rotation.x = originalRotation!.x + Math.sin(progress * Math.PI * 2) * 0.05;
+          // Phase 1: Pan to side
+          if (elapsedTime < scaledPanDuration) {
+            const progress = elapsedTime / scaledPanDuration;
+            meshRef.current.rotation.y = originalRotation.y + THREE.MathUtils.lerp(0, targetAngle, progress);
+            meshRef.current.rotation.x = originalRotation.x;
           }
+          // Phase 2: Orbit
+          else if (elapsedTime < scaledPanDuration + scaledOrbitDuration) {
+            const orbitElapsedTime = elapsedTime - scaledPanDuration;
+            const orbitProgress = orbitElapsedTime / scaledOrbitDuration;
+            meshRef.current.rotation.y = targetAngle;
+            meshRef.current.rotation.x = originalRotation.x + orbitProgress * Math.PI * 2; // Full 360 degree rotation on X
+          }
+          // Phase 3: Return to center
+          else {
+            const returnElapsedTime = elapsedTime - (scaledPanDuration + scaledOrbitDuration);
+            const returnProgress = returnElapsedTime / scaledReturnDuration;
+            meshRef.current.rotation.y = THREE.MathUtils.lerp(targetAngle, originalRotation.y, returnProgress);
+            // Keep x rotation at the final orbit position during the return pan
+            meshRef.current.rotation.x = originalRotation.x + Math.PI * 2;
+             if (returnProgress >= 1.0) {
+               meshRef.current.rotation.copy(originalRotation);
+             }
+          }
+
           requestRenderIfNotRequested();
           animationFrameIdRef.current = requestAnimationFrame(animateAndRecord);
         };
@@ -765,5 +798,7 @@ DepthWeaverScene.displayName = 'DepthWeaverScene';
 
 
 
+
+    
 
     
