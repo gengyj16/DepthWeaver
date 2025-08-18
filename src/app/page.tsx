@@ -172,22 +172,18 @@ export default function HomePage() {
   
   const handleRenderModeChange = (value: string) => {
     const newMode = value as RenderMode;
-    if (renderMode === newMode) return;
-    if (scrollAreaRef.current) {
-        scrollPositionRef.current = scrollAreaRef.current.scrollTop;
-    }
     setRenderMode(newMode);
     if (newMode === 'fill') {
       setIsFillWarningOpen(true);
     }
-    setScrollAreaKey(Date.now());
   };
 
-  const handleBackgroundModeChange = (value: 'blur' | 'solid') => {
+  const handleBackgroundModeChange = (value: string) => {
+    const newMode = value as 'blur' | 'solid';
     if (scrollAreaRef.current) {
         scrollPositionRef.current = scrollAreaRef.current.scrollTop;
     }
-    setBackgroundMode(value);
+    setBackgroundMode(newMode);
     setScrollAreaKey(Date.now());
   };
 
@@ -315,13 +311,13 @@ export default function HomePage() {
                         <Label className="font-semibold">渲染模式</Label>
                          <RadioGroup value={renderMode} onValueChange={handleRenderModeChange} className="grid grid-cols-2 gap-2">
                             <div>
-                              <RadioGroupItem value="blur" id="mode-blur" className="peer sr-only" disabled={renderMode === 'blur'} />
+                              <RadioGroupItem value="blur" id="mode-blur" className="peer sr-only" />
                               <Label htmlFor="mode-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
                                 边界模糊
                               </Label>
                             </div>
                             <div>
-                              <RadioGroupItem value="fill" id="mode-fill" className="peer sr-only" disabled={renderMode === 'fill'} />
+                              <RadioGroupItem value="fill" id="mode-fill" className="peer sr-only" />
                               <Label htmlFor="mode-fill" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
                                 背景填充(beta)
                               </Label>
