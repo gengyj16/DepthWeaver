@@ -247,7 +247,7 @@ export default function HomePage() {
                 <DialogHeader>
                   <DialogTitle>导出3D模型</DialogTitle>
                   <DialogDescription>
-                    导出的GLB格式文件可用于其他支持3D模型的平台，如PPT、Keynote，或在Blender、C4D等专业软件中进行二次创作。
+                    GLB格式文件可广泛应用于支持3D模型的办公演示软件、设计工具及三维建模软件，便于直接使用或进一步编辑。
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
@@ -498,5 +498,7 @@ export default function HomePage() {
     </main>
   );
 }
+
+    
 
     
