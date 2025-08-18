@@ -172,14 +172,18 @@ export default function HomePage() {
   
   const handleRenderModeChange = (value: string) => {
     const newMode = value as RenderMode;
+    if (renderMode === newMode) return;
+    if (scrollAreaRef.current) {
+        scrollPositionRef.current = scrollAreaRef.current.scrollTop;
+    }
     setRenderMode(newMode);
     if (newMode === 'fill') {
       setIsFillWarningOpen(true);
     }
+    setScrollAreaKey(Date.now());
   };
 
   const handleBackgroundModeChange = (value: 'blur' | 'solid') => {
-    if (backgroundMode === value) return;
     if (scrollAreaRef.current) {
         scrollPositionRef.current = scrollAreaRef.current.scrollTop;
     }
@@ -189,7 +193,6 @@ export default function HomePage() {
 
   const handleMeshDetailChange = (value: string) => {
     const newDetail = Number(value);
-    if (meshDetail === newDetail) return;
     if (scrollAreaRef.current) {
       scrollPositionRef.current = scrollAreaRef.current.scrollTop;
     }
@@ -312,20 +315,19 @@ export default function HomePage() {
                         <Label className="font-semibold">渲染模式</Label>
                          <RadioGroup value={renderMode} onValueChange={handleRenderModeChange} className="grid grid-cols-2 gap-2">
                             <div>
-                              <RadioGroupItem value="blur" id="mode-blur" className="peer sr-only" />
+                              <RadioGroupItem value="blur" id="mode-blur" className="peer sr-only" disabled={renderMode === 'blur'} />
                               <Label htmlFor="mode-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
                                 边界模糊
                               </Label>
                             </div>
                             <div>
-                              <RadioGroupItem value="fill" id="mode-fill" className="peer sr-only" />
+                              <RadioGroupItem value="fill" id="mode-fill" className="peer sr-only" disabled={renderMode === 'fill'} />
                               <Label htmlFor="mode-fill" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
                                 背景填充(beta)
                               </Label>
                             </div>
                           </RadioGroup>
-                          {renderMode === 'blur' ? (
-                            <div className="space-y-4">
+                          <div className={cn("space-y-4", { 'hidden': renderMode !== 'blur' })}>
                                <p className="text-xs text-muted-foreground">对于深度变化较大处，为缓解像素拉伸带来的撕裂感，将拉伸的像素进行模糊处理</p>
                                <div className="flex flex-col gap-2">
                                 <Label htmlFor="blur-slider" className="text-center">模糊强度: {blurIntensity.toFixed(1)}</Label>
@@ -350,8 +352,7 @@ export default function HomePage() {
                                 />
                               </div>
                             </div>
-                          ) : (
-                             <div className="space-y-4">
+                           <div className={cn("space-y-4", { 'hidden': renderMode !== 'fill' })}>
                                 <p className="text-xs text-muted-foreground">从较远处的像素选取颜色，填充背景中原本被遮住的部分</p>
                                 <div className="flex flex-col gap-2">
                                 <Label htmlFor="selection-range-slider" className="text-center">选区范围: {selectionRange}</Label>
@@ -365,7 +366,6 @@ export default function HomePage() {
                                 />
                               </div>
                             </div>
-                          )}
                       </div>
                       
                       <div className="space-y-4 rounded-lg p-3 bg-muted/50">
@@ -442,31 +442,29 @@ export default function HomePage() {
                           <Label className="text-center">背景</Label>
                             <RadioGroup value={backgroundMode} onValueChange={(value) => handleBackgroundModeChange(value as 'blur' | 'solid')} className="grid grid-cols-2 gap-2">
                               <div>
-                                <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" />
+                                <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" disabled={backgroundMode === 'blur'} />
                                 <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
                                   模糊背景
                                 </Label>
                               </div>
                               <div>
-                                <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" />
+                                <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" disabled={backgroundMode === 'solid'} />
                                 <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
                                   纯色
                                 </Label>
                               </div>
                             </RadioGroup>
                         </div>
-                        {backgroundMode === 'solid' && (
-                          <div className="flex items-center gap-4 rounded-lg p-3 bg-background/30">
-                            <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
-                            <input 
-                              id="bg-color-picker"
-                              type="color" 
-                              value={backgroundColor} 
-                              onChange={(e) => setBackgroundColor(e.target.value)}
-                              className="w-24 h-8 p-0 bg-transparent border-none cursor-pointer"
-                            />
-                          </div>
-                        )}
+                        <div className={cn("flex items-center gap-4 rounded-lg p-3 bg-background/30", { 'hidden': backgroundMode !== 'solid' })}>
+                          <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
+                          <input
+                            id="bg-color-picker"
+                            type="color"
+                            value={backgroundColor}
+                            onChange={(e) => setBackgroundColor(e.target.value)}
+                            className="w-24 h-8 p-0 bg-transparent border-none cursor-pointer"
+                          />
+                        </div>
                         <div className="flex flex-col gap-2">
                           <Label className="text-center">网格细节</Label>
                           <RadioGroup 
@@ -476,7 +474,7 @@ export default function HomePage() {
                           >
                             {[512, 1024, 2048].map(detail => (
                               <div key={detail}>
-                                <RadioGroupItem value={String(detail)} id={`mesh-${detail}`} className="peer sr-only" />
+                                <RadioGroupItem value={String(detail)} id={`mesh-${detail}`} className="peer sr-only" disabled={meshDetail === detail} />
                                 <Label htmlFor={`mesh-${detail}`} className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
                                   {detail}
                                 </Label>
@@ -508,9 +506,3 @@ export default function HomePage() {
     </main>
   );
 }
-
-    
-
-    
-
-    
