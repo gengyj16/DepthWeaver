@@ -197,7 +197,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
   const renderRequestedRef = useRef(false);
   const useSensorRef = useRef(useSensor);
-  const animationFrameIdRef = useRef<number>();
 
   useEffect(() => {
     useSensorRef.current = useSensor;
@@ -350,119 +349,105 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         setIsLoading(false);
       }
     },
-    startRecording(duration: number) {
-      return new Promise<void>((resolve, reject) => {
-        if (!mountRef.current || !rendererRef.current || !meshRef.current) {
-          return reject(new Error('Recording is not ready.'));
+    async startRecording(duration: number) {
+      if (!mountRef.current || !rendererRef.current || !meshRef.current) {
+        throw new Error('Recording is not ready.');
+      }
+      
+      const TARGET_FPS = 30;
+      const totalFrames = duration / 1000 * TARGET_FPS;
+      const canvas = rendererRef.current.domElement;
+      
+      const stream = canvas.captureStream(TARGET_FPS);
+      const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+    
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
         }
-        const canvas = rendererRef.current.domElement;
-        const stream = canvas.captureStream(30);
-        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
-
-        const chunks: Blob[] = [];
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
-            chunks.push(e.data);
-          }
-        };
-        
-        const originalRotation = meshRef.current.rotation.clone();
-
-        recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: 'video/webm' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `recording-${Date.now()}.webm`;
-          a.click();
-          URL.revokeObjectURL(url);
-          stream.getTracks().forEach(track => track.stop());
-          if(meshRef.current) {
-              meshRef.current.rotation.copy(originalRotation);
-          }
-          resolve();
-        };
-
-        recorder.onerror = (e) => {
-          console.error('MediaRecorder error:', e);
-          if(meshRef.current) {
-              meshRef.current.rotation.copy(originalRotation);
-          }
-          reject(new Error('MediaRecorder encountered an error.'));
-        };
-
-        const startTime = Date.now();
-        
+      };
+      
+      const originalRotation = meshRef.current.rotation.clone();
+      
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `recording-${Date.now()}.webm`;
+        a.click();
+        URL.revokeObjectURL(url);
+        stream.getTracks().forEach(track => track.stop());
         if(meshRef.current) {
-            meshRef.current.rotation.set(0,0,0);
+            meshRef.current.rotation.copy(originalRotation);
+            requestRenderIfNotRequested();
         }
+      };
+    
+      recorder.onerror = (e) => {
+        console.error('MediaRecorder error:', e);
+        if(meshRef.current) {
+            meshRef.current.rotation.copy(originalRotation);
+        }
+        throw new Error('MediaRecorder encountered an error.');
+      };
+      
+      if(meshRef.current) {
+          meshRef.current.rotation.set(0,0,0);
+          requestRenderIfNotRequested();
+      }
+      
+      recorder.start();
+      
+      for (let i = 0; i < totalFrames; i++) {
+        await new Promise(resolve => setTimeout(resolve, 0)); // Yield to the event loop
+        
+        if (!meshRef.current) break;
 
-        const maxAngle = maxAngleRef.current;
+        const linearProgress = i / (totalFrames - 1);
+        
         const panToSideDuration = 2000;
         const orbitDuration = 6000;
         const returnToCenterDuration = 2000;
         const totalAnimationDuration = panToSideDuration + orbitDuration + returnToCenterDuration;
         
-        const scaleFactor = duration / totalAnimationDuration;
-        const panEndProgress = (panToSideDuration * scaleFactor) / duration;
-        const orbitEndProgress = ((panToSideDuration + orbitDuration) * scaleFactor) / duration;
-
+        const scaledDuration = duration / totalAnimationDuration;
+        const panEndProgress = (panToSideDuration * scaledDuration) / duration;
+        const orbitEndProgress = ((panToSideDuration + orbitDuration) * scaledDuration) / duration;
+        
         const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
+        const easedProgress = easeInOutSine(linearProgress);
+        
+        const maxAngle = maxAngleRef.current;
+        let currentX, currentY;
 
-        const animateAndRecord = () => {
-          const elapsedTime = Date.now() - startTime;
-          const linearProgress = Math.min(elapsedTime / duration, 1);
-          
-          if (!meshRef.current) {
-            if (recorder.state === 'recording') recorder.stop();
-            return;
-          }
-          
-          const easedProgress = easeInOutSine(linearProgress);
-
-          let currentX, currentY;
-
-          if (easedProgress < panEndProgress) {
-            // Phase 1: Pan to left
+        if (easedProgress < panEndProgress) {
             const phaseProgress = easedProgress / panEndProgress;
             currentY = THREE.MathUtils.lerp(0, -maxAngle, phaseProgress);
             currentX = 0;
-          } else if (easedProgress < orbitEndProgress) {
-            // Phase 2: Orbit
+        } else if (easedProgress < orbitEndProgress) {
             const phaseProgress = (easedProgress - panEndProgress) / (orbitEndProgress - panEndProgress);
             const angle = Math.PI + phaseProgress * Math.PI * 2;
             currentY = Math.cos(angle) * maxAngle;
             currentX = Math.sin(angle) * maxAngle;
-          } else {
-            // Phase 3: Return to center
+        } else {
             const phaseProgress = (easedProgress - orbitEndProgress) / (1 - orbitEndProgress);
             const fromY = -maxAngle;
             const fromX = 0;
             currentY = THREE.MathUtils.lerp(fromY, 0, phaseProgress);
             currentX = THREE.MathUtils.lerp(fromX, 0, phaseProgress);
-          }
-          
-          meshRef.current.rotation.y = currentY;
-          meshRef.current.rotation.x = currentX;
-
-          requestRenderIfNotRequested();
-
-          if (linearProgress >= 1) {
-            if (recorder.state === 'recording') {
-               recorder.stop();
-            }
-            if (animationFrameIdRef.current) {
-                cancelAnimationFrame(animationFrameIdRef.current);
-            }
-            return;
-          }
-
-          animationFrameIdRef.current = requestAnimationFrame(animateAndRecord);
-        };
+        }
         
-        recorder.start();
-        animateAndRecord();
-      });
+        meshRef.current.rotation.y = currentY;
+        meshRef.current.rotation.x = currentX;
+        
+        if (rendererRef.current && sceneRef.current && cameraRef.current) {
+          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        }
+      }
+      
+      recorder.stop();
     },
   }));
 
@@ -764,10 +749,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       
-      if (animationFrameIdRef.current) {
-        cancelAnimationFrame(animationFrameIdRef.current);
-      }
-      
       colorTextureRef.current?.dispose();
       depthTextureRef.current?.dispose();
       bakedTextureRef.current?.dispose();
@@ -820,3 +801,4 @@ DepthWeaverScene.displayName = 'DepthWeaverScene';
     
 
     
+
