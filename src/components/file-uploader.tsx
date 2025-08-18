@@ -496,7 +496,19 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                     </p>
                     <div className="flex items-center space-x-2">
                         <Switch id="mirror-switch" checked={useMirror} onCheckedChange={handleUseMirrorChange}/>
-                        <Label htmlFor="mirror-switch">使用镜像站下载模型 (推荐中国大陆用户)</Label>
+                        <Label htmlFor="mirror-switch">
+                            使用镜像站下载模型 (
+                            <a
+                                href="https://www.modelscope.cn/models"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary underline hover:text-primary/80"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                魔搭社区
+                            </a>
+                            )
+                        </Label>
                     </div>
                      <div className="space-y-4">
                         <div className="space-y-2">
