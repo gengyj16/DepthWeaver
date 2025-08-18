@@ -471,22 +471,26 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         启用此选项后，生成深度图功能将完全在浏览器本地进行，生成过程中设备内存占用会短暂升高，根据处理器性能单张处理时长可能在几秒到十几秒不等。首次使用此功能需要连接到国际互联网下载模型。
                     </p>
                     {useLocalGenerator && (
-                        <div className="space-y-2">
-                            <Label htmlFor="local-model-select">本地模型选择</Label>
-                             <Select value={localModelName} onValueChange={handleLocalModelChange}>
-                                <SelectTrigger id="local-model-select">
-                                    <SelectValue placeholder="选择一个模型" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="onnx-community/depth-anything-v2-small">Small 速度最快，文件最小(推荐)</SelectItem>
-                                    <SelectItem value="onnx-community/depth-anything-v2-base">Base 中等</SelectItem>
-                                    <SelectItem value="onnx-community/depth-anything-v2-large">Large 速度最慢，文件最大</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <div className="text-sm flex justify-between">
-                                <div>
-                                  <span className="font-semibold">运行环境:</span> <span className="text-muted-foreground">{localGeneratorDevice}</span>
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <Label htmlFor="local-model-select">本地模型选择</Label>
+                                    <div className="text-sm text-muted-foreground">
+                                        运行环境: {localGeneratorDevice}
+                                    </div>
                                 </div>
+                                 <Select value={localModelName} onValueChange={handleLocalModelChange}>
+                                    <SelectTrigger id="local-model-select">
+                                        <SelectValue placeholder="选择一个模型" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="onnx-community/depth-anything-v2-small">Small 速度最快，文件最小(推荐)</SelectItem>
+                                        <SelectItem value="onnx-community/depth-anything-v2-base">Base 中等</SelectItem>
+                                        <SelectItem value="onnx-community/depth-anything-v2-large">Large 速度最慢，文件最大</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="text-sm flex justify-between">
                                 <div>
                                     <span className="font-semibold">下载状态:</span> <span className="text-muted-foreground">{localModelStatus}</span>
                                 </div>
