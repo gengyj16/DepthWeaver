@@ -26,7 +26,7 @@ interface FileInputBoxProps {
     description: string;
     icon: ReactNode;
     showGenerateButton?: boolean;
-    onGenerateClick?: (useLocal: boolean) => void;
+    onGenerateClick?: () => void;
     isGenerating?: boolean;
     isLocalGenerating?: boolean;
     showHelpButton?: boolean;
@@ -105,11 +105,11 @@ const FileInputBox = ({
                          <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => onGenerateClick(false)} 
+                            onClick={onGenerateClick} 
                             disabled={!acceptedFile || isGenerating || isLocalGenerating}
                             className="text-xs"
                         >
-                            {isGenerating ? (
+                            {isGenerating || isLocalGenerating ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             ) : (
                                 <Sparkles className="mr-2 h-4 w-4" />
@@ -201,6 +201,47 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         }
     }, []);
 
+    const initializeLocalGenerator = useCallback(async () => {
+        if (pipelineRef.current) return;
+
+        setLocalModelStatus('正在准备环境...');
+        try {
+            const { pipeline, env } = await import('@xenova/transformers');
+            
+            if (hfEndpoint) {
+                env.remoteHost = hfEndpoint;
+            }
+            env.allowLocalModels = true;
+            env.allowRemoteModels = true;
+
+            pipelineRef.current = await pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small', {
+                progress_callback: (progress: any) => {
+                     if (progress.status === 'progress') {
+                        const percentage = (progress.progress).toFixed(2);
+                        setLocalModelStatus(`下载中... ${percentage}% (${(progress.loaded / 1024 / 1024).toFixed(2)}MB / ${(progress.total / 1024 / 1024).toFixed(2)}MB)`);
+                    } else if (progress.status === 'ready') {
+                        setLocalModelStatus('模型准备就绪');
+                    }
+                     else {
+                        setLocalModelStatus(progress.status);
+                    }
+                }
+            });
+            setLocalModelStatus('就绪');
+        } catch (error) {
+            console.error("Local pipeline initialization failed:", error);
+            setLocalModelStatus(`失败: ${error instanceof Error ? error.message : String(error)}`);
+            pipelineRef.current = null;
+        }
+    }, [hfEndpoint]);
+
+    useEffect(() => {
+        if (useLocalGenerator && !pipelineRef.current) {
+            initializeLocalGenerator();
+        }
+    }, [useLocalGenerator, initializeLocalGenerator]);
+
+
     const handleHfEndpointChange = (value: string) => {
         setHfEndpoint(value);
         try {
@@ -225,8 +266,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         }
     };
     
-    const handleGenerateClick = (useLocal: boolean) => {
-        if (useLocal) {
+    const handleGenerateClick = () => {
+        if (useLocalGenerator) {
             handleLocalGenerateDepthMap();
         } else {
             handleRemoteGenerateDepthMap(apiUrl || defaultApiUrl);
@@ -235,33 +276,16 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
 
     const handleLocalGenerateDepthMap = useCallback(async () => {
         if (!imageFile) return;
+        if (!pipelineRef.current) {
+            toast({ variant: "destructive", title: "本地模型未就绪", description: "请等待模型下载完成或检查设置。" });
+            initializeLocalGenerator();
+            return;
+        }
 
         setIsLocalGenerating(true);
-        setLocalModelStatus('正在准备环境...');
+        setLocalModelStatus('正在生成深度图...');
         
         try {
-            if (!pipelineRef.current) {
-                const { pipeline, env } = await import('@xenova/transformers');
-                
-                if (hfEndpoint) {
-                    env.remoteHost = hfEndpoint;
-                }
-                env.allowLocalModels = true;
-                env.allowRemoteModels = true;
-
-                pipelineRef.current = await pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small', {
-                    progress_callback: (progress: any) => {
-                         if (progress.status === 'progress') {
-                            const percentage = (progress.progress).toFixed(2);
-                            setLocalModelStatus(`下载中... ${percentage}% (${(progress.loaded / 1024 / 1024).toFixed(2)}MB / ${(progress.total / 1024 / 1024).toFixed(2)}MB)`);
-                        } else {
-                            setLocalModelStatus(progress.status);
-                        }
-                    }
-                });
-            }
-            
-            setLocalModelStatus('正在生成深度图...');
             const imageUrl = URL.createObjectURL(imageFile);
             const { depth } = await pipelineRef.current(imageUrl);
             URL.revokeObjectURL(imageUrl);
@@ -292,10 +316,9 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             console.error("Local depth map generation failed:", error);
             toast({ variant: "destructive", title: "本地生成失败", description: errorMessage });
             setIsLocalGenerating(false);
-            setLocalModelStatus('失败');
-            pipelineRef.current = null; // Reset pipeline on error
+            setLocalModelStatus('就绪');
         }
-    }, [imageFile, hfEndpoint, toast]);
+    }, [imageFile, toast, initializeLocalGenerator]);
     
     const handleRemoteGenerateDepthMap = async (currentApiUrl: string) => {
         if (!imageFile) return;
@@ -489,7 +512,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         icon={<FileImage className="w-10 h-10 mb-3 text-muted-foreground" />}
                         showGenerateButton={true}
                         onGenerateClick={handleGenerateClick}
-                        isGenerating={isGenerating || isLocalGenerating}
+                        isGenerating={isGenerating}
+                        isLocalGenerating={isLocalGenerating}
                         showHelpButton={true}
                         helpDialogContent={helpDialogContent}
                     />
@@ -509,5 +533,3 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
-
-    
