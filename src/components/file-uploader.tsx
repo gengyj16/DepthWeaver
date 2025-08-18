@@ -211,8 +211,6 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             if (hfEndpoint) {
                 env.remoteHost = hfEndpoint;
             }
-            env.allowLocalModels = true;
-            env.allowRemoteModels = true;
 
             pipelineRef.current = await pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small', {
                 progress_callback: (progress: any) => {
@@ -534,3 +532,5 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     );
 }
 
+
+    
