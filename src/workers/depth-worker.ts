@@ -12,25 +12,33 @@ class DepthEstimationPipeline {
     static task = 'depth-estimation';
     static instance: Pipeline | null = null;
     static model: string | null = null;
+    static device: string | null = null;
 
     static async getInstance(model: string, progress_callback?: Function) {
         if (this.instance === null || this.model !== model) {
             this.model = model;
             
-            let options: any = { progress_callback };
+            let device: 'wasm' | 'webgpu' = 'wasm';
             // @ts-ignore
             if (typeof self.navigator !== 'undefined' && self.navigator.gpu) {
                 try {
                     const adapter = await self.navigator.gpu.requestAdapter();
                     if (adapter) {
-                       options.device = 'webgpu';
+                       device = 'webgpu';
                     }
                 } catch (e) {
                     console.warn('WebGPU is not available, falling back to WASM.', e);
                 }
             }
+            this.device = device;
             
-            this.instance = await pipeline(this.task, model, options);
+            this.instance = await pipeline(this.task, model, { progress_callback, device });
+            self.postMessage({ type: 'device-info', payload: this.device });
+        } else {
+             // If instance exists, still report the device info
+             if (this.device) {
+                self.postMessage({ type: 'device-info', payload: this.device });
+            }
         }
         return this.instance;
     }
@@ -76,5 +84,3 @@ self.onmessage = async (event: MessageEvent) => {
         self.postMessage({ type: 'error', payload: e.message });
     }
 };
-
-    

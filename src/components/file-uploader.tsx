@@ -183,6 +183,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const [isLocalGenerating, setIsLocalGenerating] = useState(false);
     const [localModelStatus, setLocalModelStatus] = useState('未初始化');
     const [localModelName, setLocalModelName] = useState('onnx-community/depth-anything-v2-small');
+    const [localGeneratorDevice, setLocalGeneratorDevice] = useState('未知');
     const workerRef = useRef<Worker>();
 
 
@@ -212,6 +213,9 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                     if (payload === '正在生成深度图...') {
                         setIsLocalGenerating(true);
                     }
+                    break;
+                case 'device-info':
+                    setLocalGeneratorDevice(payload === 'webgpu' ? 'webgpu' : 'wasm (CPU)');
                     break;
                 case 'result':
                     const { depth } = payload;
@@ -251,11 +255,12 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             workerRef.current?.removeEventListener('message', onMessageReceived);
             workerRef.current?.terminate();
         }
-    }, []);
+    }, [toast]);
 
     const initializeLocalGenerator = useCallback(() => {
         if (!workerRef.current) return;
         setLocalModelStatus('正在准备环境...');
+        setLocalGeneratorDevice('检测中...');
         workerRef.current.postMessage({
             type: 'init',
             payload: { model: localModelName }
@@ -478,11 +483,16 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                                     <SelectItem value="onnx-community/depth-anything-v2-large">Large 速度最慢，文件最大</SelectItem>
                                 </SelectContent>
                             </Select>
+                            <div className="text-sm flex justify-between">
+                                <div>
+                                  <span className="font-semibold">运行环境:</span> <span className="text-muted-foreground">{localGeneratorDevice}</span>
+                                </div>
+                                <div>
+                                    <span className="font-semibold">下载状态:</span> <span className="text-muted-foreground">{localModelStatus}</span>
+                                </div>
+                            </div>
                         </div>
                     )}
-                    <div className="text-sm">
-                        <span className="font-semibold">离线模型下载状态:</span> <span className="text-muted-foreground">{localModelStatus}</span>
-                    </div>
                 </div>
             </div>
         </DialogContent>
@@ -535,8 +545,3 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
-
-    
-    
-
-    
