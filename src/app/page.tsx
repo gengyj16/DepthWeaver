@@ -249,6 +249,8 @@ export default function HomePage() {
               renderMode={renderMode}
               selectionRange={selectionRange}
               cameraType={cameraType}
+              onDistanceChange={setCameraDistance}
+              onZoomChange={setOrthographicZoom}
             />
 
             <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>

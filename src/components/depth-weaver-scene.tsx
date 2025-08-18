@@ -24,6 +24,8 @@ interface DepthWeaverSceneProps {
   renderMode: RenderMode;
   selectionRange: number;
   cameraType: CameraType;
+  onDistanceChange: (distance: number) => void;
+  onZoomChange: (zoom: number) => void;
 }
 
 export interface DepthWeaverSceneHandle {
@@ -167,6 +169,8 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   renderMode,
   selectionRange,
   cameraType,
+  onDistanceChange,
+  onZoomChange
 }, ref) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -454,6 +458,24 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       requestRenderIfNotRequested();
   }, [requestRenderIfNotRequested]);
 
+  const onWheel = useCallback((event: WheelEvent) => {
+    event.preventDefault();
+    if (!cameraRef.current) return;
+
+    const zoomSpeed = 0.002;
+    const delta = event.deltaY * zoomSpeed;
+
+    if (cameraRef.current.type === 'PerspectiveCamera') {
+        const cam = cameraRef.current as THREE.PerspectiveCamera;
+        const newDistance = THREE.MathUtils.clamp(cam.position.z + delta, 0.5, 5);
+        onDistanceChange(newDistance);
+    } else {
+        const cam = cameraRef.current as THREE.OrthographicCamera;
+        const newZoom = THREE.MathUtils.clamp(cam.zoom - delta * cam.zoom, 0.1, 5);
+        onZoomChange(newZoom);
+    }
+  }, [onDistanceChange, onZoomChange]);
+
 
   useEffect(() => {
     const currentMount = mountRef.current;
@@ -579,6 +601,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     });
 
     currentMount.addEventListener('pointerdown', onPointerDown);
+    currentMount.addEventListener('wheel', onWheel, { passive: false });
     currentMount.style.cursor = useSensor ? 'default' : 'grab';
 
     const handleResize = () => {
@@ -609,6 +632,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       isCancelled = true;
       window.removeEventListener('resize', handleResize);
       currentMount.removeEventListener('pointerdown', onPointerDown);
+      currentMount.removeEventListener('wheel', onWheel);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       
@@ -631,7 +655,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       renderer.dispose();
       rendererRef.current = undefined;
     };
-  }, [image, depthMap]);
+  }, [image, depthMap, onWheel]);
 
   return (
     <>
@@ -654,5 +678,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 DepthWeaverScene.displayName = 'DepthWeaverScene';
 
     
+
 
 
