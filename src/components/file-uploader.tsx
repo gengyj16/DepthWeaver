@@ -209,9 +209,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         try {
             const { pipeline, env } = await import('@huggingface/transformers');
             
-            if (hfEndpoint) {
-                env.remoteHost = hfEndpoint;
-            }
+            const endpoint = hfEndpoint || 'https://huggingface.co';
+            env.remoteHost = endpoint;
 
             pipelineRef.current = await pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small', {
                 progress_callback: (progress: any) => {
@@ -295,15 +294,13 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             const ctx = canvas.getContext('2d');
             if (!ctx) throw new Error('Could not get canvas context');
             
-            // The model returns a single-channel (grayscale) depth map.
-            // We need to convert it to a 4-channel RGBA image to use with ImageData.
             const rgbaData = new Uint8ClampedArray(depth.width * depth.height * 4);
             for (let i = 0; i < depth.data.length; ++i) {
                 const depthValue = depth.data[i];
-                rgbaData[i * 4] = depthValue;     // R
-                rgbaData[i * 4 + 1] = depthValue; // G
-                rgbaData[i * 4 + 2] = depthValue; // B
-                rgbaData[i * 4 + 3] = 255;        // A
+                rgbaData[i * 4] = depthValue;
+                rgbaData[i * 4 + 1] = depthValue;
+                rgbaData[i * 4 + 2] = depthValue;
+                rgbaData[i * 4 + 3] = 255;
             }
 
             const imageData = new ImageData(rgbaData, depth.width, depth.height);
