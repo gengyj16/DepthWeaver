@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState, TouchEvent } from 'react';
+import { useEffect, useState, TouchEvent, useRef } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +29,7 @@ interface HistoryEntryProps {
 
 function HistoryEntryCard({ entry, onLoad, onDelete }: HistoryEntryProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const touchStartRef = useRef<{ x: number, y: number, time: number } | null>(null);
 
   useEffect(() => {
     if (entry.image) {
@@ -41,9 +42,30 @@ function HistoryEntryCard({ entry, onLoad, onDelete }: HistoryEntryProps) {
     }
   }, [entry.image]);
 
+  const handleTouchStart = (e: TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      time: Date.now(),
+    };
+  };
+
   const handleTouchEnd = (e: TouchEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    onLoad(entry);
+    if (!touchStartRef.current) return;
+
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+    const dt = Date.now() - touchStartRef.current.time;
+
+    // Check for a tap (short duration, small movement)
+    if (dt < 300 && Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      e.preventDefault();
+      onLoad(entry);
+    }
+    
+    touchStartRef.current = null;
   };
   
   if (!imageUrl) return null;
@@ -54,6 +76,7 @@ function HistoryEntryCard({ entry, onLoad, onDelete }: HistoryEntryProps) {
         <div
           className="aspect-square w-full relative cursor-pointer"
           onClick={() => onLoad(entry)}
+          onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
           <Image
@@ -134,3 +157,5 @@ export function HistoryList({ history, onLoad, onDelete }: HistoryListProps) {
 
 // Re-exporting HistoryDbEntry as HistoryEntry for backward compatibility if needed elsewhere
 export type HistoryEntry = HistoryDbEntry;
+
+    
