@@ -50,7 +50,7 @@ export default function HomePage() {
   const [cameraDistance, setCameraDistance] = useState(2);
   const [orthographicZoom, setOrthographicZoom] = useState(1);
   const [meshDetail, setMeshDetail] = useState(1024);
-  const [blurIntensity, setBlurIntensity] = useState(1.0);
+  const [blurIntensity, setBlurIntensity] = useState(5);
   const [blurOffset, setBlurOffset] = useState(1);
   const [viewAngleLimit, setViewAngleLimit] = useState(10);
   const [useSensor, setUseSensor] = useState(false);
@@ -247,7 +247,7 @@ export default function HomePage() {
                 <DialogHeader>
                   <DialogTitle>导出3D模型</DialogTitle>
                   <DialogDescription>
-                    此功能将把当前场景导出为GLB文件。导出的模型将包含经过位移的3D网格以及应用了当前渲染设置（如边界模糊）的纹理。
+                    导出的GLB格式文件可用于其他支持3D模型的平台，如PPT、Keynote，或在Blender、C4D等专业软件中进行二次创作。
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
@@ -264,7 +264,7 @@ export default function HomePage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>功能开发中</AlertDialogTitle>
                   <AlertDialogDescription>
-                    背景填充功能仍在开发中，暂时作为留空处理。
+                    背景填充功能仍在开发中，暂时只做留空处理。
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogAction onClick={() => setIsFillWarningOpen(false)}>知道了</AlertDialogAction>
@@ -318,7 +318,7 @@ export default function HomePage() {
                             <div className="space-y-4">
                                <p className="text-xs text-muted-foreground">对于深度变化较大处，为缓解像素拉伸带来的撕裂感，将拉伸的像素进行模糊处理</p>
                                <div className="flex flex-col gap-2">
-                                <Label htmlFor="blur-slider" className="text-center">模糊强度: {blurIntensity.toFixed(2)}</Label>
+                                <Label htmlFor="blur-slider" className="text-center">模糊强度: {blurIntensity.toFixed(1)}</Label>
                                 <Slider
                                   id="blur-slider"
                                   min={0}
@@ -329,7 +329,7 @@ export default function HomePage() {
                                 />
                               </div>
                               <div className="flex flex-col gap-2">
-                                <Label htmlFor="blur-offset-slider" className="text-center">取样偏移: {blurOffset.toFixed(2)}</Label>
+                                <Label htmlFor="blur-offset-slider" className="text-center">取样偏移: {blurOffset.toFixed(1)}</Label>
                                 <Slider
                                   id="blur-offset-slider"
                                   min={-1}
@@ -498,3 +498,5 @@ export default function HomePage() {
     </main>
   );
 }
+
+    
