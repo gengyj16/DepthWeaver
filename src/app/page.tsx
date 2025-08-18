@@ -167,7 +167,7 @@ export default function HomePage() {
   const handleRecord = async () => {
     if (!sceneRef.current || isRecording) return;
     setIsRecording(true);
-    toast({ title: "开始录制", description: "自动运镜动画将持续10秒。" });
+    toast({ title: "录制中", description: "正在自动运镜，请稍候..." });
     try {
       await sceneRef.current.startRecording(10000);
       toast({ title: "录制成功", description: "视频已开始下载。" });
