@@ -435,7 +435,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           if (rendererRef.current && sceneRef.current && cameraRef.current) {
             rendererRef.current.render(sceneRef.current, cameraRef.current);
           }
-          await new Promise(resolve => setTimeout(resolve, 16));
+          await new Promise(resolve => setTimeout(resolve, 33));
         }
         
         if (recorder.state === "recording") {
@@ -812,4 +812,5 @@ DepthWeaverScene.displayName = 'DepthWeaverScene';
     
 
     
+
 
