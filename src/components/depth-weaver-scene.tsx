@@ -649,10 +649,22 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     
     const loadingManager = new THREE.LoadingManager();
     const textureLoader = new THREE.TextureLoader(loadingManager);
+
+    const applyTextureSettings = (texture: THREE.Texture) => {
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+    };
     
     Promise.all([
-      new Promise<THREE.Texture>(resolve => textureLoader.load(image, resolve)),
-      new Promise<THREE.Texture>(resolve => textureLoader.load(depthMap, resolve))
+      new Promise<THREE.Texture>(resolve => textureLoader.load(image, (tex) => {
+        applyTextureSettings(tex);
+        resolve(tex);
+      })),
+      new Promise<THREE.Texture>(resolve => textureLoader.load(depthMap, (tex) => {
+        applyTextureSettings(tex);
+        resolve(tex);
+      }))
     ]).then(([colorTex, depthTex]) => {
       if (isCancelled) return;
       
