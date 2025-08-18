@@ -206,7 +206,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
 
         setLocalModelStatus('正在准备环境...');
         try {
-            const { pipeline, env } = await import('@xenova/transformers');
+            const { pipeline, env } = await import('@huggingface/transformers');
             
             if (hfEndpoint) {
                 env.remoteHost = hfEndpoint;
@@ -533,3 +533,5 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
