@@ -169,7 +169,7 @@ export default function HomePage() {
     setIsRecording(true);
     toast({ title: "录制中", description: "正在自动运镜，请稍候..." });
     try {
-      await sceneRef.current.startRecording(10000);
+      await sceneRef.current.startRecording(3000);
       toast({ title: "录制成功", description: "视频已开始下载。" });
     } catch (error) {
        console.error("Recording failed", error);
