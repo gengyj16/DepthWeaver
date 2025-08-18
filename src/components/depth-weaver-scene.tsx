@@ -420,18 +420,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           
           const easedProgress = easeInOutSine(linearProgress);
 
-          if (linearProgress >= 1) {
-            if (recorder.state === 'recording') {
-               meshRef.current.rotation.set(0, 0, 0);
-               requestRenderIfNotRequested();
-               recorder.stop();
-            }
-            if (animationFrameIdRef.current) {
-                cancelAnimationFrame(animationFrameIdRef.current);
-            }
-            return;
-          }
-
           let currentX, currentY;
 
           if (easedProgress < panEndProgress) {
@@ -458,6 +446,17 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           meshRef.current.rotation.x = currentX;
 
           requestRenderIfNotRequested();
+
+          if (linearProgress >= 1) {
+            if (recorder.state === 'recording') {
+               recorder.stop();
+            }
+            if (animationFrameIdRef.current) {
+                cancelAnimationFrame(animationFrameIdRef.current);
+            }
+            return;
+          }
+
           animationFrameIdRef.current = requestAnimationFrame(animateAndRecord);
         };
         
