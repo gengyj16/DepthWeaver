@@ -281,8 +281,20 @@ export default function HomePage() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>导出3D模型</DialogTitle>
-                  <DialogDescription>
-                    GLB格式文件可广泛应用于支持3D模型的办公演示软件、设计工具及三维建模软件，便于直接使用或进一步编辑。
+                  <DialogDescription asChild>
+                    <div>
+                      GLB格式文件可广泛应用于支持3D模型的办公演示软件、设计工具及三维建模软件，便于直接使用或进一步编辑。
+                      你也可以使用{' '}
+                      <a
+                        href="https://gltf-viewer.donmccurdy.com/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline"
+                      >
+                        gltf-viewer
+                      </a>{' '}
+                      在网页端查看。
+                    </div>
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
