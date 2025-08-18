@@ -290,7 +290,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         setTimeout(async () => {
             try {
                 const imageUrl = URL.createObjectURL(imageFile);
-                const { depth } = await pipelineRef.current(imageUrl) as any;
+                const { depth } = await pipelineRef.current!(imageUrl) as any;
                 URL.revokeObjectURL(imageUrl);
                 
                 const canvas = document.createElement('canvas');
@@ -547,5 +547,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         </Card>
     );
 }
+
+    
 
     
