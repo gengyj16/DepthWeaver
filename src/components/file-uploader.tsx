@@ -523,9 +523,10 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                                     <SelectValue placeholder="选择一个模型" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="onnx-community/depth-anything-v2-small">Small (速度最快，资源占用低)</SelectItem>
+                                    <SelectItem value="onnx-community/depth-anything-v2-small">Small (速度最快)</SelectItem>
                                     <SelectItem value="onnx-community/depth-anything-v2-base">Base (中等)</SelectItem>
-                                    <SelectItem value="onnx-community/depth-anything-v2-large">Large (效果最好，资源占用高)</SelectItem>
+                                    <SelectItem value="onnx-community/depth-anything-v2-large">Large (效果较好)</SelectItem>
+                                    <SelectItem value="onnx-community/DepthPro-ONNX">DepthPro (效果最好，由 Apple 开源)</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
