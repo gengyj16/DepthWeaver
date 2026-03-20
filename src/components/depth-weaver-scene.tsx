@@ -1,9 +1,119 @@
-
 "use client";
 
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+
+// Post-processing imports
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+
+// Custom shaders for post-processing
+const colorGradingShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    saturation: { value: 1.0 },
+    contrast: { value: 1.0 },
+    brightness: { value: 1.0 },
+    toneMapping: { value: 0 }, // 0: None, 1: ACESFilmic
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float saturation;
+    uniform float contrast;
+    uniform float brightness;
+    uniform int toneMapping;
+    varying vec2 vUv;
+
+    vec3 ACESFilmicToneMapping(vec3 color) {
+      float a = 2.51;
+      float b = 0.03;
+      float c = 2.43;
+      float d = 0.59;
+      float e = 0.14;
+      return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
+    }
+
+    void main() {
+      vec4 texel = texture2D(tDiffuse, vUv);
+      vec3 color = texel.rgb;
+
+      // Brightness
+      color *= brightness;
+
+      // Contrast
+      color = (color - 0.5) * contrast + 0.5;
+
+      // Saturation
+      float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+      color = mix(vec3(luminance), color, saturation);
+
+      // Tone Mapping
+      if (toneMapping == 1) {
+        color = ACESFilmicToneMapping(color);
+      }
+
+      gl_FragColor = vec4(color, texel.a);
+    }
+  `
+};
+
+// Depth of Field shader
+const depthOfFieldShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    tDepth: { value: null },
+    focusDistance: { value: 0.5 },
+    focusRange: { value: 0.1 },
+    blurStrength: { value: 1.0 },
+    resolution: { value: new THREE.Vector2(1, 1) },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform sampler2D tDepth;
+    uniform float focusDistance;
+    uniform float focusRange;
+    uniform float blurStrength;
+    uniform vec2 resolution;
+    varying vec2 vUv;
+
+    void main() {
+      float depth = texture2D(tDepth, vUv).r;
+      float blur = smoothstep(focusDistance - focusRange, focusDistance + focusRange, depth);
+      blur = abs(blur - 0.5) * 2.0 * blurStrength;
+
+      vec2 texelSize = 1.0 / resolution;
+      vec4 color = vec4(0.0);
+      float total = 0.0;
+
+      for (float x = -4.0; x <= 4.0; x += 1.0) {
+        for (float y = -4.0; y <= 4.0; y += 1.0) {
+          vec2 offset = vec2(x, y) * texelSize * blur * 5.0;
+          color += texture2D(tDiffuse, vUv + offset);
+          total += 1.0;
+        }
+      }
+
+      gl_FragColor = color / total;
+    }
+  `
+};
 
 type RenderMode = 'blur' | 'fill';
 type CameraType = 'perspective' | 'orthographic';
@@ -26,6 +136,27 @@ interface DepthWeaverSceneProps {
   cameraType: CameraType;
   onDistanceChange: (distance: number) => void;
   onZoomChange: (zoom: number) => void;
+  // PBR Material Props
+  metalness?: number;
+  roughness?: number;
+  emissiveIntensity?: number;
+  emissiveColor?: string;
+  normalMapScale?: number;
+  transparency?: number;
+  usePBR?: boolean;
+  // Post-processing Props
+  bloomEnabled?: boolean;
+  bloomStrength?: number;
+  bloomRadius?: number;
+  bloomThreshold?: number;
+  dofEnabled?: boolean;
+  dofFocusDistance?: number;
+  dofFocusRange?: number;
+  dofBlurStrength?: number;
+  toneMappingEnabled?: boolean;
+  saturation?: number;
+  contrast?: number;
+  brightness?: number;
 }
 
 export interface DepthWeaverSceneHandle {
@@ -51,6 +182,39 @@ const getDepthDataFromImage = (imageUrl: string): Promise<ImageData> => {
     image.onerror = (err) => reject(err);
     image.src = imageUrl;
   });
+};
+
+// Normal map generator from depth map
+const generateNormalMap = (depthData: ImageData, strength: number = 1.0): ImageData => {
+  const { width, height, data } = depthData;
+  const normalData = new Uint8ClampedArray(width * height * 4);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      
+      // Sample neighboring pixels
+      const left = x > 0 ? data[idx - 4] : data[idx];
+      const right = x < width - 1 ? data[idx + 4] : data[idx];
+      const up = y > 0 ? data[idx - width * 4] : data[idx];
+      const down = y < height - 1 ? data[idx + width * 4] : data[idx];
+
+      // Calculate gradients
+      const dx = (right - left) * strength / 255.0;
+      const dy = (down - up) * strength / 255.0;
+
+      // Calculate normal
+      const normal = new THREE.Vector3(-dx, -dy, 1.0).normalize();
+
+      // Convert to RGB
+      normalData[idx] = ((normal.x + 1) * 0.5) * 255;
+      normalData[idx + 1] = ((normal.y + 1) * 0.5) * 255;
+      normalData[idx + 2] = ((normal.z + 1) * 0.5) * 255;
+      normalData[idx + 3] = 255;
+    }
+  }
+
+  return new ImageData(normalData, width, height);
 };
 
 const bakingVertexShader = `
@@ -133,11 +297,13 @@ const liveVertexShader = `
   uniform sampler2D uDepthMap;
   uniform float uDepthMultiplier;
   varying vec2 vUv;
+  varying float vDepth;
   
   void main() {
     vUv = uv;
     vec4 depthColor = texture2D(uDepthMap, uv);
     float depth = depthColor.r;
+    vDepth = depth;
     float displacement = depth * uDepthMultiplier;
     vec3 newPosition = position + normal * displacement;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
@@ -146,24 +312,28 @@ const liveVertexShader = `
 
 const liveFragmentShader = `
   uniform sampler2D uBakedTexture;
+  uniform float uEmissiveIntensity;
+  uniform vec3 uEmissiveColor;
   varying vec2 vUv;
+  varying float vDepth;
 
   void main() {
-    gl_FragColor = texture2D(uBakedTexture, vUv);
+    vec4 texColor = texture2D(uBakedTexture, vUv);
+    vec3 emissive = uEmissiveColor * uEmissiveIntensity * vDepth;
+    gl_FragColor = vec4(texColor.rgb + emissive, texColor.a);
   }
 `;
 
-
-export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSceneProps>(({ 
-  image, 
-  depthMap, 
-  depthMultiplier, 
-  cameraDistance, 
+export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSceneProps>(({
+  image,
+  depthMap,
+  depthMultiplier,
+  cameraDistance,
   orthographicZoom,
-  meshDetail, 
-  blurIntensity, 
+  meshDetail,
+  blurIntensity,
   blurOffset,
-  viewAngleLimit, 
+  viewAngleLimit,
   useSensor,
   backgroundMode,
   backgroundColor,
@@ -171,7 +341,28 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   selectionRange,
   cameraType,
   onDistanceChange,
-  onZoomChange
+  onZoomChange,
+  // PBR defaults
+  metalness = 0.0,
+  roughness = 0.5,
+  emissiveIntensity = 0.0,
+  emissiveColor = '#ffffff',
+  normalMapScale = 1.0,
+  transparency = 0.0,
+  usePBR = false,
+  // Post-processing defaults
+  bloomEnabled = false,
+  bloomStrength = 0.5,
+  bloomRadius = 0.4,
+  bloomThreshold = 0.85,
+  dofEnabled = false,
+  dofFocusDistance = 0.5,
+  dofFocusRange = 0.1,
+  dofBlurStrength = 1.0,
+  toneMappingEnabled = false,
+  saturation = 1.0,
+  contrast = 1.0,
+  brightness = 1.0,
 }, ref) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -183,10 +374,17 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   
   const colorTextureRef = useRef<THREE.Texture>();
   const depthTextureRef = useRef<THREE.Texture>();
+  const normalMapRef = useRef<THREE.Texture>();
 
   const liveMaterialRef = useRef<THREE.ShaderMaterial>();
   const bakingMaterialRef = useRef<THREE.ShaderMaterial>();
   const bakedTextureRef = useRef<THREE.WebGLRenderTarget>();
+  
+  // Post-processing refs
+  const composerRef = useRef<EffectComposer>();
+  const bloomPassRef = useRef<UnrealBloomPass>();
+  const colorGradingPassRef = useRef<ShaderPass>();
+  const dofPassRef = useRef<ShaderPass>();
 
   const maxAngleRef = useRef(THREE.MathUtils.degToRad(viewAngleLimit));
   
@@ -208,8 +406,8 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       renderRequestedRef.current = true;
       requestAnimationFrame(() => {
         renderRequestedRef.current = false;
-        if (rendererRef.current && sceneRef.current && cameraRef.current) {
-          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        if (composerRef.current) {
+          composerRef.current.render();
         }
       });
     }
@@ -317,7 +515,11 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         tempRenderTarget.dispose();
     
         return new Promise<void>((resolve, reject) => {
-          const exportMaterial = new THREE.MeshBasicMaterial({ map: canvasTexture });
+          const exportMaterial = new THREE.MeshStandardMaterial({ 
+            map: canvasTexture,
+            metalness: metalness,
+            roughness: roughness,
+          });
           const exportMesh = new THREE.Mesh(clonedGeometry, exportMaterial);
           exportMesh.scale.copy(originalMesh.scale);
     
@@ -408,17 +610,14 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
               
               const maxAngle = maxAngleRef.current;
               
-              // Calculate radius: starts at 0, goes to maxAngle, then back to 0
               const radius = Math.sin(linearProgress * Math.PI) * maxAngle;
-              
-              // Calculate angle: spins 720 degrees (2 full circles)
               const angle = easedProgress * Math.PI * 4;
 
               meshRef.current.rotation.y = Math.sin(angle) * radius;
               meshRef.current.rotation.x = Math.cos(angle) * radius;
               
-              if (rendererRef.current && sceneRef.current && cameraRef.current) {
-                rendererRef.current.render(sceneRef.current, cameraRef.current);
+              if (composerRef.current) {
+                composerRef.current.render();
               }
               await new Promise(resolve => setTimeout(resolve, 33));
           }
@@ -449,9 +648,37 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     maxAngleRef.current = THREE.MathUtils.degToRad(viewAngleLimit);
   }, [viewAngleLimit]);
 
+  // Update post-processing uniforms
+  useEffect(() => {
+    if (bloomPassRef.current) {
+      bloomPassRef.current.strength = bloomStrength;
+      bloomPassRef.current.radius = bloomRadius;
+      bloomPassRef.current.threshold = bloomThreshold;
+    }
+    if (colorGradingPassRef.current) {
+      colorGradingPassRef.current.uniforms.saturation.value = saturation;
+      colorGradingPassRef.current.uniforms.contrast.value = contrast;
+      colorGradingPassRef.current.uniforms.brightness.value = brightness;
+      colorGradingPassRef.current.uniforms.toneMapping.value = toneMappingEnabled ? 1 : 0;
+    }
+    if (dofPassRef.current) {
+      dofPassRef.current.uniforms.focusDistance.value = dofFocusDistance;
+      dofPassRef.current.uniforms.focusRange.value = dofFocusRange;
+      dofPassRef.current.uniforms.blurStrength.value = dofBlurStrength;
+    }
+    requestRenderIfNotRequested();
+  }, [
+    bloomStrength, bloomRadius, bloomThreshold,
+    saturation, contrast, brightness, toneMappingEnabled,
+    dofFocusDistance, dofFocusRange, dofBlurStrength,
+    requestRenderIfNotRequested
+  ]);
+
   useEffect(() => {
     if (liveMaterialRef.current) {
         liveMaterialRef.current.uniforms.uDepthMultiplier.value = depthMultiplier;
+        liveMaterialRef.current.uniforms.uEmissiveIntensity.value = emissiveIntensity;
+        liveMaterialRef.current.uniforms.uEmissiveColor.value = new THREE.Color(emissiveColor);
     }
     if (cameraRef.current) {
         if (cameraRef.current.type === 'PerspectiveCamera') {
@@ -465,14 +692,39 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       sceneRef.current.background = backgroundMode === 'solid' ? new THREE.Color(backgroundColor) : null;
       rendererRef.current.setClearAlpha(backgroundMode === 'blur' ? 0 : 1);
     }
+    
+    // Update PBR material if using PBR
+    if (meshRef.current && usePBR) {
+      const material = meshRef.current.material as THREE.MeshStandardMaterial;
+      if (material) {
+        material.metalness = metalness;
+        material.roughness = roughness;
+        material.emissive = new THREE.Color(emissiveColor);
+        material.emissiveIntensity = emissiveIntensity;
+        material.transparent = transparency > 0;
+        material.opacity = 1 - transparency;
+        if (normalMapRef.current) {
+          material.normalMap = normalMapRef.current;
+          material.normalScale = new THREE.Vector2(normalMapScale, normalMapScale);
+        }
+      }
+    }
+    
     requestRenderIfNotRequested();
-  }, [depthMultiplier, cameraDistance, orthographicZoom, backgroundMode, backgroundColor, requestRenderIfNotRequested]);
+  }, [
+    depthMultiplier, cameraDistance, orthographicZoom, backgroundMode, backgroundColor,
+    metalness, roughness, emissiveIntensity, emissiveColor, normalMapScale, transparency, usePBR,
+    requestRenderIfNotRequested
+  ]);
 
   useEffect(() => {
-    if (meshRef.current && meshRef.current.geometry.parameters.widthSegments !== meshDetail) {
-      meshRef.current.geometry.dispose();
-      meshRef.current.geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
-      requestRenderIfNotRequested();
+    if (meshRef.current) {
+      const geo = meshRef.current.geometry as THREE.PlaneGeometry;
+      if (geo.parameters && geo.parameters.widthSegments !== meshDetail) {
+        meshRef.current.geometry.dispose();
+        meshRef.current.geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
+        requestRenderIfNotRequested();
+      }
     }
   }, [meshDetail, requestRenderIfNotRequested]);
   
@@ -505,8 +757,46 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     }
     newCamera.updateProjectionMatrix();
     cameraRef.current = newCamera;
+    
+    // Update composer camera
+    if (composerRef.current) {
+      composerRef.current.dispose();
+      
+      const renderScene = new RenderPass(sceneRef.current!, newCamera);
+      
+      const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(currentMount.clientWidth, currentMount.clientHeight),
+        bloomStrength,
+        bloomRadius,
+        bloomThreshold
+      );
+      bloomPassRef.current = bloomPass;
+
+      const colorGradingPass = new ShaderPass(colorGradingShader);
+      colorGradingPass.uniforms.saturation.value = saturation;
+      colorGradingPass.uniforms.contrast.value = contrast;
+      colorGradingPass.uniforms.brightness.value = brightness;
+      colorGradingPass.uniforms.toneMapping.value = toneMappingEnabled ? 1 : 0;
+      colorGradingPassRef.current = colorGradingPass;
+
+      const dofPass = new ShaderPass(depthOfFieldShader);
+      dofPass.uniforms.tDepth.value = depthTextureRef.current;
+      dofPass.uniforms.focusDistance.value = dofFocusDistance;
+      dofPass.uniforms.focusRange.value = dofFocusRange;
+      dofPass.uniforms.blurStrength.value = dofBlurStrength;
+      dofPass.uniforms.resolution.value = new THREE.Vector2(currentMount.clientWidth, currentMount.clientHeight);
+      dofPassRef.current = dofPass;
+
+      const composer = new EffectComposer(rendererRef.current!);
+      composer.addPass(renderScene);
+      if (bloomEnabled) composer.addPass(bloomPass);
+      if (dofEnabled) composer.addPass(dofPass);
+      composer.addPass(colorGradingPass);
+      composerRef.current = composer;
+    }
+    
     requestRenderIfNotRequested();
-  }, [cameraType, cameraDistance, orthographicZoom, requestRenderIfNotRequested]);
+  }, [cameraType, cameraDistance, orthographicZoom, bloomEnabled, bloomStrength, bloomRadius, bloomThreshold, dofEnabled, dofFocusDistance, dofFocusRange, dofBlurStrength, toneMappingEnabled, saturation, contrast, brightness, requestRenderIfNotRequested]);
 
 
   const onPointerMove = useCallback((event: PointerEvent) => {
@@ -550,8 +840,10 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         initialOrientationRef.current = { beta: event.beta, gamma: event.gamma };
       }
       
-      const beta = event.beta - initialOrientationRef.current.beta;
-      const gamma = event.gamma - initialOrientationRef.current.gamma;
+      const initialBeta = initialOrientationRef.current.beta ?? 0;
+      const initialGamma = initialOrientationRef.current.gamma ?? 0;
+      const beta = event.beta - initialBeta;
+      const gamma = event.gamma - initialGamma;
 
       const maxAngle = maxAngleRef.current;
       const smoothingFactor = 0.1;
@@ -597,88 +889,65 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       } else {
         window.addEventListener('deviceorientation', handleDeviceOrientation);
       }
-      if(currentMount) currentMount.style.cursor = 'default';
-    } else {
-      initialOrientationRef.current = { beta: null, gamma: null };
-      if (meshRef.current && !isRecordingRef.current) {
-        meshRef.current.rotation.x = 0;
-        meshRef.current.rotation.y = 0;
-        requestRenderIfNotRequested();
-      }
-       if(currentMount) currentMount.style.cursor = 'grab';
     }
-
     return () => {
       window.removeEventListener('deviceorientation', handleDeviceOrientation);
-    }
-  }, [useSensor, handleDeviceOrientation, requestRenderIfNotRequested]);
+    };
+  }, [useSensor, handleDeviceOrientation]);
 
   useEffect(() => {
-    if (!mountRef.current || !image || !depthMap) return;
-    let isCancelled = false;
+    const currentMount = mountRef.current;
+    if (!currentMount) return;
+
     setIsLoading(true);
 
-    const currentMount = mountRef.current;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-    renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    currentMount.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+    const width = currentMount.clientWidth;
+    const height = currentMount.clientHeight;
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    
-    let camera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
-    const aspect = currentMount.clientWidth / currentMount.clientHeight;
-    if (cameraType === 'perspective') {
-        camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 100);
-        camera.position.z = cameraDistance;
-    } else {
-        const frustumSize = 2;
-        camera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 0.1, 100);
-        camera.zoom = orthographicZoom;
-        camera.position.z = 6;
-        camera.updateProjectionMatrix();
-    }
-    cameraRef.current = camera;
-    
-    scene.background = backgroundMode === 'solid' ? new THREE.Color(backgroundColor) : null;
-    renderer.setClearAlpha(backgroundMode === 'blur' ? 0 : 1);
-    
-    const loadingManager = new THREE.LoadingManager();
-    const textureLoader = new THREE.TextureLoader(loadingManager);
 
-    const applyTextureSettings = (texture: THREE.Texture) => {
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.generateMipmaps = false;
-    };
-    
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    currentMount.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    const aspect = width / height;
+    let camera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+    if (cameraType === 'perspective') {
+      camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 100);
+      camera.position.z = cameraDistance;
+    } else {
+      const frustumSize = 2;
+      camera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 0.1, 100);
+      camera.zoom = orthographicZoom;
+      camera.position.z = 6;
+    }
+    camera.updateProjectionMatrix();
+    cameraRef.current = camera;
+
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.setCrossOrigin('anonymous');
+
     Promise.all([
-      new Promise<THREE.Texture>(resolve => textureLoader.load(image, (tex) => {
-        applyTextureSettings(tex);
-        resolve(tex);
-      })),
-      new Promise<THREE.Texture>(resolve => textureLoader.load(depthMap, (tex) => {
-        applyTextureSettings(tex);
-        resolve(tex);
-      }))
+      new Promise<THREE.Texture>((resolve, reject) => {
+        textureLoader.load(image, (tex) => resolve(tex), undefined, reject);
+      }),
+      new Promise<THREE.Texture>((resolve, reject) => {
+        textureLoader.load(depthMap, (tex) => resolve(tex), undefined, reject);
+      })
     ]).then(([colorTex, depthTex]) => {
-      if (isCancelled) return;
-      
       colorTextureRef.current = colorTex;
       depthTextureRef.current = depthTex;
 
-      // --- Baking Pass ---
-      const resolution = new THREE.Vector2(colorTex.image.width, colorTex.image.height);
-      const bakedRT = new THREE.WebGLRenderTarget(resolution.x, resolution.y, {
+      const img = colorTex.image as HTMLImageElement;
+      const bakedTarget = new THREE.WebGLRenderTarget(img.width, img.height, {
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
         format: THREE.RGBAFormat,
       });
-      bakedTextureRef.current = bakedRT;
+      bakedTextureRef.current = bakedTarget;
 
       const bakingMat = new THREE.ShaderMaterial({
         uniforms: {
@@ -686,7 +955,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           uDepthMap: { value: depthTex },
           uBlurIntensity: { value: blurIntensity },
           uBlurOffset: { value: blurOffset },
-          uResolution: { value: resolution },
+          uResolution: { value: new THREE.Vector2((colorTex.image as HTMLImageElement).width, (colorTex.image as HTMLImageElement).height) },
           uRenderMode: { value: renderMode === 'fill' ? 1 : 0 },
         },
         vertexShader: bakingVertexShader,
@@ -694,106 +963,194 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       });
       bakingMaterialRef.current = bakingMat;
 
-      runBakePass();
+      // Generate normal map from depth
+      getDepthDataFromImage(depthMap).then((depthData) => {
+        const normalImageData = generateNormalMap(depthData, normalMapScale);
+        const normalCanvas = document.createElement('canvas');
+        normalCanvas.width = normalImageData.width;
+        normalCanvas.height = normalImageData.height;
+        const normalCtx = normalCanvas.getContext('2d');
+        if (normalCtx) {
+          normalCtx.putImageData(normalImageData, 0, 0);
+          const normalTexture = new THREE.CanvasTexture(normalCanvas);
+          normalTexture.wrapS = THREE.RepeatWrapping;
+          normalTexture.wrapT = THREE.RepeatWrapping;
+          normalMapRef.current = normalTexture;
+        }
+      });
 
-      // --- Live Scene Setup ---
-      const geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
-      const liveMaterial = new THREE.ShaderMaterial({
+      const liveMat = new THREE.ShaderMaterial({
         uniforms: {
-          uBakedTexture: { value: bakedRT.texture },
+          uBakedTexture: { value: bakedTarget.texture },
           uDepthMap: { value: depthTex },
           uDepthMultiplier: { value: depthMultiplier },
+          uEmissiveIntensity: { value: emissiveIntensity },
+          uEmissiveColor: { value: new THREE.Color(emissiveColor) },
         },
         vertexShader: liveVertexShader,
         fragmentShader: liveFragmentShader,
       });
-      liveMaterialRef.current = liveMaterial;
+      liveMaterialRef.current = liveMat;
 
-      const plane = new THREE.Mesh(geometry, liveMaterial);
-      const imageAspect = colorTex.image.width / colorTex.image.height;
-      plane.scale.set(imageAspect, 1, 1);
-      scene.add(plane);
-      meshRef.current = plane;
+      // Use PBR material if enabled
+      let meshMaterial: THREE.Material = liveMat;
+      if (usePBR) {
+        meshMaterial = new THREE.MeshPhysicalMaterial({
+          map: bakedTarget.texture,
+          metalness: metalness,
+          roughness: roughness,
+          emissive: new THREE.Color(emissiveColor),
+          emissiveIntensity: emissiveIntensity,
+          transparent: transparency > 0,
+          opacity: 1 - transparency,
+          transmission: transparency,
+          thickness: 1.0,
+          envMapIntensity: 1.0,
+          clearcoat: 0.5,
+          clearcoatRoughness: 0.1,
+        });
+      }
 
+      const geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
+      const mesh = new THREE.Mesh(geometry, meshMaterial);
+      meshRef.current = mesh;
+      scene.add(mesh);
+
+      // Add lights for PBR
+      if (usePBR) {
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+
+        const pointLight = new THREE.PointLight(0xffffff, 0.5);
+        pointLight.position.set(-5, 3, 5);
+        scene.add(pointLight);
+      }
+
+      // Setup post-processing
+      const renderScene = new RenderPass(scene, camera);
+      
+      const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(width, height),
+        bloomStrength,
+        bloomRadius,
+        bloomThreshold
+      );
+      bloomPassRef.current = bloomPass;
+
+      const colorGradingPass = new ShaderPass(colorGradingShader);
+      colorGradingPass.uniforms.saturation.value = saturation;
+      colorGradingPass.uniforms.contrast.value = contrast;
+      colorGradingPass.uniforms.brightness.value = brightness;
+      colorGradingPass.uniforms.toneMapping.value = toneMappingEnabled ? 1 : 0;
+      colorGradingPassRef.current = colorGradingPass;
+
+      const dofPass = new ShaderPass(depthOfFieldShader);
+      dofPass.uniforms.tDepth.value = depthTex;
+      dofPass.uniforms.focusDistance.value = dofFocusDistance;
+      dofPass.uniforms.focusRange.value = dofFocusRange;
+      dofPass.uniforms.blurStrength.value = dofBlurStrength;
+      dofPass.uniforms.resolution.value = new THREE.Vector2(width, height);
+      dofPassRef.current = dofPass;
+
+      const composer = new EffectComposer(renderer);
+      composer.addPass(renderScene);
+      if (bloomEnabled) composer.addPass(bloomPass);
+      if (dofEnabled) composer.addPass(dofPass);
+      composer.addPass(colorGradingPass);
+      composerRef.current = composer;
+
+      runBakePass();
       setIsLoading(false);
-      requestRenderIfNotRequested();
+    }).catch((err) => {
+      console.error("Failed to load textures:", err);
+      setIsLoading(false);
     });
 
     currentMount.addEventListener('pointerdown', onPointerDown);
     currentMount.addEventListener('wheel', onWheel, { passive: false });
-    currentMount.style.cursor = useSensor ? 'default' : 'grab';
+    currentMount.style.cursor = 'grab';
 
     const handleResize = () => {
-      if (!mountRef.current) return;
-      const width = currentMount.clientWidth;
-      const height = currentMount.clientHeight;
-      renderer.setSize(width, height);
+      if (!currentMount || !rendererRef.current || !cameraRef.current) return;
+      const newWidth = currentMount.clientWidth;
+      const newHeight = currentMount.clientHeight;
+      rendererRef.current.setSize(newWidth, newHeight);
       
-      const cam = cameraRef.current;
-      if (cam) {
-        const newAspect = width / height;
-        if (cam.type === 'PerspectiveCamera') {
-          (cam as THREE.PerspectiveCamera).aspect = newAspect;
-        } else if (cam.type === 'OrthographicCamera') {
-          const orthoCam = cam as THREE.OrthographicCamera;
-          const frustumSize = 2;
-          orthoCam.left = frustumSize * newAspect / -2;
-          orthoCam.right = frustumSize * newAspect / 2;
-          orthoCam.top = frustumSize / 2;
-          orthoCam.bottom = frustumSize / -2;
-        }
-        cam.updateProjectionMatrix();
+      if (composerRef.current) {
+        composerRef.current.setSize(newWidth, newHeight);
       }
+      
+      if (dofPassRef.current) {
+        dofPassRef.current.uniforms.resolution.value = new THREE.Vector2(newWidth, newHeight);
+      }
+
+      const newAspect = newWidth / newHeight;
+      if (cameraRef.current.type === 'PerspectiveCamera') {
+        (cameraRef.current as THREE.PerspectiveCamera).aspect = newAspect;
+      } else {
+        const frustumSize = 2;
+        (cameraRef.current as THREE.OrthographicCamera).left = frustumSize * newAspect / -2;
+        (cameraRef.current as THREE.OrthographicCamera).right = frustumSize * newAspect / 2;
+      }
+      cameraRef.current.updateProjectionMatrix();
       requestRenderIfNotRequested();
     };
+
     window.addEventListener('resize', handleResize);
 
     return () => {
-      isCancelled = true;
-      isRecordingRef.current = false; // Stop any recording on unmount
       window.removeEventListener('resize', handleResize);
       currentMount.removeEventListener('pointerdown', onPointerDown);
       currentMount.removeEventListener('wheel', onWheel);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
+      
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+        if (currentMount.contains(rendererRef.current.domElement)) {
+          currentMount.removeChild(rendererRef.current.domElement);
+        }
+      }
+      
+      if (composerRef.current) {
+        composerRef.current.dispose();
+      }
       
       colorTextureRef.current?.dispose();
       depthTextureRef.current?.dispose();
+      normalMapRef.current?.dispose();
       bakedTextureRef.current?.dispose();
+      liveMaterialRef.current?.dispose();
       bakingMaterialRef.current?.dispose();
-
-      if (meshRef.current) {
-        meshRef.current.geometry?.dispose();
-        liveMaterialRef.current?.dispose();
-        scene.remove(meshRef.current);
+      meshRef.current?.geometry.dispose();
+      if (meshRef.current?.material) {
+        if (Array.isArray(meshRef.current.material)) {
+          meshRef.current.material.forEach(m => m.dispose());
+        } else {
+          meshRef.current.material.dispose();
+        }
       }
-      meshRef.current = undefined;
-      liveMaterialRef.current = undefined;
-
-      if (renderer.domElement && currentMount.contains(renderer.domElement)) {
-         currentMount.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
-      rendererRef.current = undefined;
     };
-  }, [image, depthMap, onWheel, onPointerDown]);
+  }, [image, depthMap, cameraType, cameraDistance, orthographicZoom, meshDetail, blurIntensity, blurOffset, renderMode, depthMultiplier, emissiveIntensity, emissiveColor, metalness, roughness, normalMapScale, transparency, usePBR, bloomEnabled, bloomStrength, bloomRadius, bloomThreshold, dofEnabled, dofFocusDistance, dofFocusRange, dofBlurStrength, toneMappingEnabled, saturation, contrast, brightness, runBakePass, onPointerDown, onWheel, requestRenderIfNotRequested]);
 
   return (
-    <>
+    <div 
+      ref={mountRef} 
+      className="w-full h-full relative"
+      style={{ touchAction: 'none' }}
+    >
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-10">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-primary mx-auto"></div>
-            <p className="mt-4 text-lg font-semibold">正在构建3D场景...</p>
+        <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-10">
+          <div className="flex flex-col items-center gap-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <span className="text-sm text-muted-foreground">加载中...</span>
           </div>
         </div>
       )}
-      <div 
-        ref={mountRef} 
-        className="absolute inset-0 w-full h-full"
-        style={{ touchAction: 'none' }}
-      />
-    </>
+    </div>
   );
 });
+
 DepthWeaverScene.displayName = 'DepthWeaverScene';
