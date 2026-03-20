@@ -1,12 +1,44 @@
-
 "use client";
 
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
 type RenderMode = 'blur' | 'fill';
 type CameraType = 'perspective' | 'orthographic';
+
+interface PBRSettings {
+  metalness: number;
+  roughness: number;
+  normalIntensity: number;
+  emissiveIntensity: number;
+  emissiveColor: string;
+  opacity: number;
+  transmission: number;
+  ior: number;
+  thickness: number;
+}
+
+interface PostProcessingSettings {
+  bloomEnabled: boolean;
+  bloomStrength: number;
+  bloomRadius: number;
+  bloomThreshold: number;
+  dofEnabled: boolean;
+  dofFocusDistance: number;
+  dofFocalLength: number;
+  dofBokehScale: number;
+  toneMapping: 'none' | 'linear' | 'reinhard' | 'cineon' | 'aces';
+  saturation: number;
+  contrast: number;
+  brightness: number;
+}
 
 interface DepthWeaverSceneProps {
   image: string;
@@ -24,6 +56,8 @@ interface DepthWeaverSceneProps {
   renderMode: RenderMode;
   selectionRange: number;
   cameraType: CameraType;
+  pbrSettings: PBRSettings;
+  postProcessingSettings: PostProcessingSettings;
   onDistanceChange: (distance: number) => void;
   onZoomChange: (zoom: number) => void;
 }
@@ -90,7 +124,7 @@ const bakingFragmentShader = `
     float gradient = smoothstep(0.0, 0.05, sqrt(dx*dx + dy*dy));
 
     if (gradient > 0.1) {
-      if (uRenderMode == 0) { // Blur Mode
+      if (uRenderMode == 0) {
         vec4 blurredColor = vec4(0.0);
         float totalWeight = 0.0;
         float blurStrength = gradient * uBlurIntensity;
@@ -120,7 +154,7 @@ const bakingFragmentShader = `
         } else {
           gl_FragColor = texture2D(uTexture, vUv);
         }
-      } else { // Fill Mode
+      } else {
         discard;
       }
     } else {
@@ -129,47 +163,199 @@ const bakingFragmentShader = `
   }
 `;
 
-const liveVertexShader = `
+const pbrVertexShader = `
   uniform sampler2D uDepthMap;
   uniform float uDepthMultiplier;
+  uniform float uNormalIntensity;
   varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vPosition;
   
   void main() {
     vUv = uv;
+    
+    float pixelSize = 1.0 / 512.0;
+    float depthL = texture2D(uDepthMap, uv - vec2(pixelSize, 0.0)).r;
+    float depthR = texture2D(uDepthMap, uv + vec2(pixelSize, 0.0)).r;
+    float depthT = texture2D(uDepthMap, uv + vec2(0.0, pixelSize)).r;
+    float depthB = texture2D(uDepthMap, uv - vec2(0.0, pixelSize)).r;
+    
+    vec3 dx = vec3(pixelSize * 2.0, 0.0, (depthR - depthL) * uNormalIntensity);
+    vec3 dy = vec3(0.0, pixelSize * 2.0, (depthT - depthB) * uNormalIntensity);
+    vNormal = normalize(cross(dy, dx));
+    
     vec4 depthColor = texture2D(uDepthMap, uv);
     float depth = depthColor.r;
     float displacement = depth * uDepthMultiplier;
     vec3 newPosition = position + normal * displacement;
+    vPosition = newPosition;
+    
     gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
   }
 `;
 
-const liveFragmentShader = `
+const pbrFragmentShader = `
   uniform sampler2D uBakedTexture;
+  uniform sampler2D uDepthMap;
+  uniform float uMetalness;
+  uniform float uRoughness;
+  uniform float uEmissiveIntensity;
+  uniform vec3 uEmissiveColor;
+  uniform float uOpacity;
+  uniform float uTransmission;
+  uniform float uIor;
+  uniform float uThickness;
+  uniform vec3 uLightPosition;
+  
   varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vPosition;
+
+  const float PI = 3.14159265359;
+
+  vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+  }
+
+  float distributionGGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+
+    float num = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return num / denom;
+  }
+
+  float geometrySchlickGGX(float NdotV, float roughness) {
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
+
+    float num = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return num / denom;
+  }
+
+  float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2 = geometrySchlickGGX(NdotV, roughness);
+    float ggx1 = geometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+  }
 
   void main() {
-    gl_FragColor = texture2D(uBakedTexture, vUv);
+    vec4 baseColor = texture2D(uBakedTexture, vUv);
+    vec3 albedo = baseColor.rgb;
+    
+    vec3 N = normalize(vNormal);
+    vec3 V = normalize(cameraPosition - vPosition);
+    vec3 L = normalize(uLightPosition - vPosition);
+    vec3 H = normalize(V + L);
+    
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, albedo, uMetalness);
+
+    float NDF = distributionGGX(N, H, uRoughness);
+    float G = geometrySmith(N, V, L, uRoughness);
+    vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+    kD *= 1.0 - uMetalness;
+
+    vec3 numerator = NDF * G * F;
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+    vec3 specular = numerator / denominator;
+
+    float NdotL = max(dot(N, L), 0.0);
+    vec3 lightColor = vec3(1.0, 0.98, 0.95) * 3.0;
+    vec3 Lo = (kD * albedo / PI + specular) * lightColor * NdotL;
+
+    vec3 ambient = vec3(0.03) * albedo;
+    vec3 color = ambient + Lo;
+
+    vec3 emissive = uEmissiveColor * uEmissiveIntensity * albedo;
+    color += emissive;
+
+    float depth = texture2D(uDepthMap, vUv).r;
+    float transmissionFactor = uTransmission * (1.0 - depth);
+    
+    if (transmissionFactor > 0.0) {
+      float eta = 1.0 / uIor;
+      vec3 refractDir = refract(-V, N, eta);
+      vec3 refractColor = texture2D(uBakedTexture, vUv + refractDir.xy * uThickness * 0.1).rgb;
+      color = mix(color, refractColor, transmissionFactor);
+    }
+
+    color = color / (color + vec3(1.0));
+    color = pow(color, vec3(1.0 / 2.2));
+
+    float finalOpacity = mix(uOpacity, 1.0, transmissionFactor);
+    
+    gl_FragColor = vec4(color, finalOpacity);
   }
 `;
 
+const ColorCorrectionShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    saturation: { value: 1.0 },
+    contrast: { value: 1.0 },
+    brightness: { value: 0.0 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float saturation;
+    uniform float contrast;
+    uniform float brightness;
+    varying vec2 vUv;
 
-export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSceneProps>(({ 
-  image, 
-  depthMap, 
-  depthMultiplier, 
-  cameraDistance, 
+    void main() {
+      vec4 color = texture2D(tDiffuse, vUv);
+      
+      vec3 finalColor = color.rgb + brightness;
+      
+      float gray = dot(finalColor, vec3(0.299, 0.587, 0.114));
+      finalColor = mix(vec3(gray), finalColor, saturation);
+      
+      finalColor = (finalColor - 0.5) * contrast + 0.5;
+      
+      gl_FragColor = vec4(clamp(finalColor, 0.0, 1.0), color.a);
+    }
+  `,
+};
+
+export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSceneProps>(({
+  image,
+  depthMap,
+  depthMultiplier,
+  cameraDistance,
   orthographicZoom,
-  meshDetail, 
-  blurIntensity, 
+  meshDetail,
+  blurIntensity,
   blurOffset,
-  viewAngleLimit, 
+  viewAngleLimit,
   useSensor,
   backgroundMode,
   backgroundColor,
   renderMode,
   selectionRange,
   cameraType,
+  pbrSettings,
+  postProcessingSettings,
   onDistanceChange,
   onZoomChange
 }, ref) => {
@@ -187,6 +373,11 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   const liveMaterialRef = useRef<THREE.ShaderMaterial>();
   const bakingMaterialRef = useRef<THREE.ShaderMaterial>();
   const bakedTextureRef = useRef<THREE.WebGLRenderTarget>();
+
+  const composerRef = useRef<EffectComposer>();
+  const bloomPassRef = useRef<UnrealBloomPass>();
+  const bokehPassRef = useRef<BokehPass>();
+  const colorCorrectionPassRef = useRef<ShaderPass>();
 
   const maxAngleRef = useRef(THREE.MathUtils.degToRad(viewAngleLimit));
   
@@ -208,8 +399,8 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       renderRequestedRef.current = true;
       requestAnimationFrame(() => {
         renderRequestedRef.current = false;
-        if (rendererRef.current && sceneRef.current && cameraRef.current) {
-          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        if (composerRef.current && sceneRef.current && cameraRef.current) {
+          composerRef.current.render();
         }
       });
     }
@@ -291,7 +482,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           const pixelX = Math.floor(u * (depthWidth - 1));
           const pixelY = Math.floor(v * (depthHeight - 1));
           const pixelIndex = (pixelY * depthWidth + pixelX) * 4;
-          const depth = depthData.data[pixelIndex] / 255.0; 
+          const depth = depthData.data[pixelIndex] / 255.0;
           const displacement = depth * depthMultiplier;
           positionAttribute.setZ(i, originalMesh.geometry.attributes.position.getZ(i) + displacement);
         }
@@ -408,17 +599,15 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
               
               const maxAngle = maxAngleRef.current;
               
-              // Calculate radius: starts at 0, goes to maxAngle, then back to 0
               const radius = Math.sin(linearProgress * Math.PI) * maxAngle;
               
-              // Calculate angle: spins 720 degrees (2 full circles)
               const angle = easedProgress * Math.PI * 4;
 
               meshRef.current.rotation.y = Math.sin(angle) * radius;
               meshRef.current.rotation.x = Math.cos(angle) * radius;
               
-              if (rendererRef.current && sceneRef.current && cameraRef.current) {
-                rendererRef.current.render(sceneRef.current, cameraRef.current);
+              if (composerRef.current && sceneRef.current && cameraRef.current) {
+                composerRef.current.render();
               }
               await new Promise(resolve => setTimeout(resolve, 33));
           }
@@ -451,22 +640,31 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
   useEffect(() => {
     if (liveMaterialRef.current) {
-        liveMaterialRef.current.uniforms.uDepthMultiplier.value = depthMultiplier;
+      liveMaterialRef.current.uniforms.uDepthMultiplier.value = depthMultiplier;
+      liveMaterialRef.current.uniforms.uMetalness.value = pbrSettings.metalness;
+      liveMaterialRef.current.uniforms.uRoughness.value = pbrSettings.roughness;
+      liveMaterialRef.current.uniforms.uNormalIntensity.value = pbrSettings.normalIntensity;
+      liveMaterialRef.current.uniforms.uEmissiveIntensity.value = pbrSettings.emissiveIntensity;
+      liveMaterialRef.current.uniforms.uEmissiveColor.value = new THREE.Color(pbrSettings.emissiveColor);
+      liveMaterialRef.current.uniforms.uOpacity.value = pbrSettings.opacity;
+      liveMaterialRef.current.uniforms.uTransmission.value = pbrSettings.transmission;
+      liveMaterialRef.current.uniforms.uIor.value = pbrSettings.ior;
+      liveMaterialRef.current.uniforms.uThickness.value = pbrSettings.thickness;
     }
     if (cameraRef.current) {
-        if (cameraRef.current.type === 'PerspectiveCamera') {
-            (cameraRef.current as THREE.PerspectiveCamera).position.z = cameraDistance;
-        } else {
-            (cameraRef.current as THREE.OrthographicCamera).zoom = orthographicZoom;
-        }
-        cameraRef.current.updateProjectionMatrix();
+      if (cameraRef.current.type === 'PerspectiveCamera') {
+        (cameraRef.current as THREE.PerspectiveCamera).position.z = cameraDistance;
+      } else {
+        (cameraRef.current as THREE.OrthographicCamera).zoom = orthographicZoom;
+      }
+      cameraRef.current.updateProjectionMatrix();
     }
     if (sceneRef.current && rendererRef.current) {
       sceneRef.current.background = backgroundMode === 'solid' ? new THREE.Color(backgroundColor) : null;
       rendererRef.current.setClearAlpha(backgroundMode === 'blur' ? 0 : 1);
     }
     requestRenderIfNotRequested();
-  }, [depthMultiplier, cameraDistance, orthographicZoom, backgroundMode, backgroundColor, requestRenderIfNotRequested]);
+  }, [depthMultiplier, cameraDistance, orthographicZoom, backgroundMode, backgroundColor, pbrSettings, requestRenderIfNotRequested]);
 
   useEffect(() => {
     if (meshRef.current && meshRef.current.geometry.parameters.widthSegments !== meshDetail) {
@@ -505,9 +703,64 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     }
     newCamera.updateProjectionMatrix();
     cameraRef.current = newCamera;
+    
+    if (composerRef.current && sceneRef.current) {
+      composerRef.current.passes.forEach(pass => {
+        if (pass instanceof RenderPass) {
+          pass.camera = newCamera;
+        }
+        if (pass instanceof BokehPass) {
+          pass.camera = newCamera;
+        }
+      });
+    }
+    
     requestRenderIfNotRequested();
   }, [cameraType, cameraDistance, orthographicZoom, requestRenderIfNotRequested]);
 
+  useEffect(() => {
+    if (!composerRef.current) return;
+
+    if (bloomPassRef.current) {
+      bloomPassRef.current.enabled = postProcessingSettings.bloomEnabled;
+      bloomPassRef.current.strength = postProcessingSettings.bloomStrength;
+      bloomPassRef.current.radius = postProcessingSettings.bloomRadius;
+      bloomPassRef.current.threshold = postProcessingSettings.bloomThreshold;
+    }
+
+    if (bokehPassRef.current) {
+      bokehPassRef.current.enabled = postProcessingSettings.dofEnabled;
+    }
+    
+    if (colorCorrectionPassRef.current) {
+      colorCorrectionPassRef.current.uniforms.saturation.value = postProcessingSettings.saturation;
+      colorCorrectionPassRef.current.uniforms.contrast.value = postProcessingSettings.contrast;
+      colorCorrectionPassRef.current.uniforms.brightness.value = postProcessingSettings.brightness;
+    }
+
+    if (rendererRef.current) {
+      switch (postProcessingSettings.toneMapping) {
+        case 'none':
+          rendererRef.current.toneMapping = THREE.NoToneMapping;
+          break;
+        case 'linear':
+          rendererRef.current.toneMapping = THREE.LinearToneMapping;
+          break;
+        case 'reinhard':
+          rendererRef.current.toneMapping = THREE.ReinhardToneMapping;
+          break;
+        case 'cineon':
+          rendererRef.current.toneMapping = THREE.CineonToneMapping;
+          break;
+        case 'aces':
+          rendererRef.current.toneMapping = THREE.ACESFilmicToneMapping;
+          break;
+      }
+      rendererRef.current.toneMappingExposure = 1.0;
+    }
+
+    requestRenderIfNotRequested();
+  }, [postProcessingSettings, requestRenderIfNotRequested]);
 
   const onPointerMove = useCallback((event: PointerEvent) => {
       if (!isDraggingRef.current || useSensorRef.current) return;
@@ -624,6 +877,8 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     currentMount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -671,7 +926,6 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       colorTextureRef.current = colorTex;
       depthTextureRef.current = depthTex;
 
-      // --- Baking Pass ---
       const resolution = new THREE.Vector2(colorTex.image.width, colorTex.image.height);
       const bakedRT = new THREE.WebGLRenderTarget(resolution.x, resolution.y, {
         minFilter: THREE.LinearFilter,
@@ -696,16 +950,26 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
       runBakePass();
 
-      // --- Live Scene Setup ---
       const geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
       const liveMaterial = new THREE.ShaderMaterial({
         uniforms: {
           uBakedTexture: { value: bakedRT.texture },
           uDepthMap: { value: depthTex },
           uDepthMultiplier: { value: depthMultiplier },
+          uMetalness: { value: pbrSettings.metalness },
+          uRoughness: { value: pbrSettings.roughness },
+          uNormalIntensity: { value: pbrSettings.normalIntensity },
+          uEmissiveIntensity: { value: pbrSettings.emissiveIntensity },
+          uEmissiveColor: { value: new THREE.Color(pbrSettings.emissiveColor) },
+          uOpacity: { value: pbrSettings.opacity },
+          uTransmission: { value: pbrSettings.transmission },
+          uIor: { value: pbrSettings.ior },
+          uThickness: { value: pbrSettings.thickness },
+          uLightPosition: { value: new THREE.Vector3(2, 2, 3) },
         },
-        vertexShader: liveVertexShader,
-        fragmentShader: liveFragmentShader,
+        vertexShader: pbrVertexShader,
+        fragmentShader: pbrFragmentShader,
+        transparent: true,
       });
       liveMaterialRef.current = liveMaterial;
 
@@ -714,6 +978,41 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       plane.scale.set(imageAspect, 1, 1);
       scene.add(plane);
       meshRef.current = plane;
+
+      const composer = new EffectComposer(renderer);
+      const renderPass = new RenderPass(scene, camera);
+      composer.addPass(renderPass);
+
+      const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(currentMount.clientWidth, currentMount.clientHeight),
+        postProcessingSettings.bloomStrength,
+        postProcessingSettings.bloomRadius,
+        postProcessingSettings.bloomThreshold
+      );
+      bloomPass.enabled = postProcessingSettings.bloomEnabled;
+      composer.addPass(bloomPass);
+      bloomPassRef.current = bloomPass;
+
+      const bokehPass = new BokehPass(scene, camera, {
+        focus: postProcessingSettings.dofFocusDistance,
+        aperture: 0.00001 * postProcessingSettings.dofBokehScale,
+        maxblur: 0.01,
+      });
+      bokehPass.enabled = postProcessingSettings.dofEnabled;
+      composer.addPass(bokehPass);
+      bokehPassRef.current = bokehPass;
+
+      const colorCorrectionPass = new ShaderPass(ColorCorrectionShader);
+      colorCorrectionPass.uniforms.saturation.value = postProcessingSettings.saturation;
+      colorCorrectionPass.uniforms.contrast.value = postProcessingSettings.contrast;
+      colorCorrectionPass.uniforms.brightness.value = postProcessingSettings.brightness;
+      composer.addPass(colorCorrectionPass);
+      colorCorrectionPassRef.current = colorCorrectionPass;
+
+      const outputPass = new OutputPass();
+      composer.addPass(outputPass);
+
+      composerRef.current = composer;
 
       setIsLoading(false);
       requestRenderIfNotRequested();
@@ -728,6 +1027,10 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       const width = currentMount.clientWidth;
       const height = currentMount.clientHeight;
       renderer.setSize(width, height);
+      
+      if (composerRef.current) {
+        composerRef.current.setSize(width, height);
+      }
       
       const cam = cameraRef.current;
       if (cam) {
@@ -750,7 +1053,7 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
 
     return () => {
       isCancelled = true;
-      isRecordingRef.current = false; // Stop any recording on unmount
+      isRecordingRef.current = false;
       window.removeEventListener('resize', handleResize);
       currentMount.removeEventListener('pointerdown', onPointerDown);
       currentMount.removeEventListener('wheel', onWheel);
@@ -769,6 +1072,14 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       }
       meshRef.current = undefined;
       liveMaterialRef.current = undefined;
+
+      if (composerRef.current) {
+        composerRef.current.dispose();
+        composerRef.current = undefined;
+      }
+      bloomPassRef.current = undefined;
+      bokehPassRef.current = undefined;
+      colorCorrectionPassRef.current = undefined;
 
       if (renderer.domElement && currentMount.contains(renderer.domElement)) {
          currentMount.removeChild(renderer.domElement);
@@ -796,4 +1107,5 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     </>
   );
 });
+
 DepthWeaverScene.displayName = 'DepthWeaverScene';

@@ -1,11 +1,10 @@
-
 "use client";
 
-import { useState, ChangeEvent, DragEvent, ReactNode, useEffect, useRef, useCallback } from 'react';
+import { useState, ChangeEvent, DragEvent, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { UploadCloud, FileImage, Loader2, Sparkles, Download, HelpCircle, Info } from 'lucide-react';
+import { UploadCloud, FileImage, Loader2, Sparkles, Info } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -14,48 +13,44 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 
 interface FileUploaderProps {
     onFilesSelected: (image: File, depthMap: File) => void;
 }
 
-interface FileInputBoxProps {
-    id: string;
-    onFileSelect: (file: File) => void;
-    acceptedFile: File | null;
-    label: string;
-    description: string;
-    icon: ReactNode;
-    showGenerateButton?: boolean;
-    onGenerateClick?: () => void;
-    isGenerating?: boolean;
-    isLocalGenerating?: boolean;
-    showHelpButton?: boolean;
-    helpDialogContent?: ReactNode;
-}
-
-const FileInputBox = ({ 
-    id, 
-    onFileSelect, 
-    acceptedFile, 
-    label, 
-    description, 
-    icon, 
-    showGenerateButton, 
-    onGenerateClick, 
-    isGenerating, 
-    isLocalGenerating,
-    showHelpButton,
-    helpDialogContent
-}: FileInputBoxProps) => {
-    const [isDragging, setIsDragging] = useState(false);
+export function FileUploader({ onFilesSelected }: FileUploaderProps) {
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [generationProgress, setGenerationProgress] = useState(0);
+    const [generationStatus, setGenerationStatus] = useState('');
+    const { toast } = useToast();
+    const defaultApiUrl = 'https://depth-anything-depth-anything-v2.hf.space';
+    const [apiUrl, setApiUrl] = useState(defaultApiUrl);
+    
+    const [useLocalGenerator, setUseLocalGenerator] = useState(true);
+    const [useMirror, setUseMirror] = useState(false);
+    const [localModelStatus, setLocalModelStatus] = useState('未初始化');
+    const [localModelName, setLocalModelName] = useState('onnx-community/depth-anything-v2-small');
+    const [localGeneratorDevice, setLocalGeneratorDevice] = useState('未知');
+    const workerRef = useRef<Worker>();
+    const imageFileRef = useRef<File | null>(null);
+    const onFilesSelectedRef = useRef(onFilesSelected);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
 
     useEffect(() => {
-        if (acceptedFile) {
-            const url = URL.createObjectURL(acceptedFile);
-            setPreviewUrl(url);
+        onFilesSelectedRef.current = onFilesSelected;
+    }, [onFilesSelected]);
 
+    useEffect(() => {
+        imageFileRef.current = imageFile;
+    }, [imageFile]);
+
+    useEffect(() => {
+        if (imageFile) {
+            const url = URL.createObjectURL(imageFile);
+            setPreviewUrl(url);
             return () => {
                 URL.revokeObjectURL(url);
                 setPreviewUrl(null);
@@ -63,130 +58,7 @@ const FileInputBox = ({
         } else {
             setPreviewUrl(null);
         }
-    }, [acceptedFile]);
-
-    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) {
-            onFileSelect(e.target.files[0]);
-        }
-    };
-
-    const handleDragEnter = (e: DragEvent<HTMLLabelElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(true);
-    };
-
-    const handleDragLeave = (e: DragEvent<HTMLLabelElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(false);
-    };
-
-    const handleDrop = (e: DragEvent<HTMLLabelElement>) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(false);
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            onFileSelect(e.dataTransfer.files[0]);
-        }
-    };
-
-    return (
-        <div className="space-y-2">
-            <div className='flex items-center justify-between h-9'>
-                <div className="flex items-center gap-2">
-                    <label htmlFor={id} className="block text-sm font-medium text-foreground">{label}</label>
-                </div>
-                <div className="flex items-center gap-2">
-                    {description && !showGenerateButton && (
-                         <p className="text-xs text-muted-foreground">{description}</p>
-                    )}
-                    {showGenerateButton && onGenerateClick && (
-                         <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={onGenerateClick} 
-                            disabled={!acceptedFile || isGenerating || isLocalGenerating}
-                            className="text-xs"
-                        >
-                            {isGenerating || isLocalGenerating ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <Sparkles className="mr-2 h-4 w-4" />
-                            )}
-                            生成深度图
-                        </Button>
-                    )}
-                    {showHelpButton && helpDialogContent && (
-                        <Dialog>
-                            <DialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-6 w-6">
-                                    <HelpCircle className="h-4 w-4" />
-                                </Button>
-                            </DialogTrigger>
-                            {helpDialogContent}
-                        </Dialog>
-                    )}
-                </div>
-            </div>
-            <label
-                htmlFor={id}
-                className={cn(
-                    "relative group flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-muted/50 border-border transition-colors overflow-hidden",
-                    isDragging && "border-primary bg-primary/10"
-                )}
-                onDragEnter={handleDragEnter}
-                onDragLeave={handleDragLeave}
-                onDragOver={handleDragEnter}
-                onDrop={handleDrop}
-            >
-                 {acceptedFile && previewUrl ? (
-                    <>
-                        <img src={previewUrl} alt="Preview" className="h-full w-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <p className="text-sm text-white font-semibold max-w-full truncate px-2">{acceptedFile.name}</p>
-                            <p className="text-xs text-gray-300">点击或拖动来更换</p>
-                        </div>
-                        <a
-                            href={previewUrl}
-                            download={acceptedFile.name}
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors"
-                        >
-                            <Download className="w-4 h-4" />
-                        </a>
-                    </>
-                ) : (
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
-                        {icon}
-                        <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold text-primary">点击上传</span> 或拖放文件</p>
-                        <p className="text-xs text-muted-foreground">支持 PNG, JPG, 或 WEBP</p>
-                    </div>
-                )}
-                <input id={id} type="file" className="hidden" onChange={handleFileChange} accept="image/png, image/jpeg, image/webp" />
-            </label>
-        </div>
-    );
-};
-
-export function FileUploader({ onFilesSelected }: FileUploaderProps) {
-    const [imageFile, setImageFile] = useState<File | null>(null);
-    const [depthMapFile, setDepthMapFile] = useState<File | null>(null);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const { toast } = useToast();
-    const defaultApiUrl = 'https://depth-anything-depth-anything-v2.hf.space';
-    const [apiUrl, setApiUrl] = useState(defaultApiUrl);
-    
-    // Local generation state
-    const [useLocalGenerator, setUseLocalGenerator] = useState(false);
-    const [useMirror, setUseMirror] = useState(false);
-    const [isLocalGenerating, setIsLocalGenerating] = useState(false);
-    const [localModelStatus, setLocalModelStatus] = useState('未初始化');
-    const [localModelName, setLocalModelName] = useState('onnx-community/depth-anything-v2-small');
-    const [localGeneratorDevice, setLocalGeneratorDevice] = useState('未知');
-    const workerRef = useRef<Worker>();
-
+    }, [imageFile]);
 
     useEffect(() => {
         try {
@@ -206,7 +78,6 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             console.error("Failed to read from localStorage", error);
         }
 
-        // Initialize worker
         workerRef.current = new Worker(new URL('../workers/depth-worker.ts', import.meta.url));
 
         const onMessageReceived = (e: MessageEvent) => {
@@ -214,12 +85,17 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
             switch(type) {
                 case 'status':
                     setLocalModelStatus(payload);
-                    if (payload === '正在生成深度图...') {
-                        setIsLocalGenerating(true);
+                    if (payload.includes('下载中')) {
+                        const match = payload.match(/(\d+\.\d+)%/);
+                        if (match) {
+                            setGenerationProgress(parseFloat(match[1]));
+                        }
+                    } else if (payload === '正在生成深度图...') {
+                        setGenerationProgress(90);
                     }
                     break;
                 case 'device-info':
-                    setLocalGeneratorDevice(payload === 'webgpu' ? 'webgpu' : 'wasm (CPU)');
+                    setLocalGeneratorDevice(payload === 'webgpu' ? 'WebGPU' : 'WASM (CPU)');
                     break;
                 case 'result':
                     const { depth } = payload;
@@ -233,32 +109,32 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                     ctx.putImageData(imageData, 0, 0);
 
                     canvas.toBlob((blob) => {
-                        if (blob) {
+                        const currentImageFile = imageFileRef.current;
+                        if (blob && currentImageFile) {
                             const generatedFile = new File([blob], "generated-depth-map.png", { type: "image/png" });
-                            setDepthMapFile(generatedFile);
-                            toast({ title: "成功", description: "深度图已在本地生成并载入。" });
+                            setGenerationProgress(100);
+                            setGenerationStatus('深度图生成完成');
+                            toast({ title: "成功", description: "深度图已生成，正在进入3D场景..." });
+                            onFilesSelectedRef.current(currentImageFile, generatedFile);
                         } else {
                             throw new Error("Canvas to Blob conversion failed.");
                         }
-                        setIsLocalGenerating(false);
+                        setIsGenerating(false);
                         setLocalModelStatus('就绪');
                     }, 'image/png');
                     break;
                 case 'error':
-                    toast({ variant: "destructive", title: "Worker 错误", description: payload });
-                    setIsLocalGenerating(false);
+                    toast({ variant: "destructive", title: "错误", description: payload });
+                    setIsGenerating(false);
                     setLocalModelStatus('错误');
+                    setGenerationProgress(0);
                     break;
             }
         };
 
         workerRef.current.addEventListener('message', onMessageReceived);
-        
-        // Pre-check environment
         workerRef.current.postMessage({ type: 'init', payload: { model: 'pre-check' } });
 
-
-        // Cleanup
         return () => {
             workerRef.current?.removeEventListener('message', onMessageReceived);
             workerRef.current?.terminate();
@@ -280,7 +156,6 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         }
     }, [useLocalGenerator, localModelName, useMirror, initializeLocalGenerator]);
 
-    
     const handleUseLocalChange = (checked: boolean) => {
         setUseLocalGenerator(checked);
         try {
@@ -308,13 +183,51 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         }
     }
 
-    const handleSubmit = async () => {
-        if (imageFile && depthMapFile) {
-            onFilesSelected(imageFile, depthMapFile);
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) {
+            handleImageSelect(e.target.files[0]);
         }
     };
-    
-    const handleGenerateClick = () => {
+
+    const handleDragEnter = (e: DragEvent<HTMLLabelElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: DragEvent<HTMLLabelElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e: DragEvent<HTMLLabelElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleImageSelect(e.dataTransfer.files[0]);
+        }
+    };
+
+    const handleImageSelect = (file: File) => {
+        setImageFile(file);
+        setGenerationProgress(0);
+        setGenerationStatus('准备生成深度图...');
+    };
+
+    useEffect(() => {
+        if (imageFile && !isGenerating) {
+            const timer = setTimeout(() => {
+                handleGenerateDepthMap();
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [imageFile]);
+
+    const handleGenerateDepthMap = () => {
+        if (!imageFile) return;
+        
         if (useLocalGenerator) {
             handleLocalGenerateDepthMap();
         } else {
@@ -333,6 +246,10 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
              return;
         }
 
+        setIsGenerating(true);
+        setGenerationStatus('正在生成深度图...');
+        setGenerationProgress(10);
+
         const imageUrl = URL.createObjectURL(imageFile);
         
         setTimeout(() => {
@@ -341,12 +258,9 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 type: 'generate',
                 payload: { imageUrl }
             });
-            // The URL needs to be revoked after the worker has used it.
-            // For simplicity, we can do it after a short delay, assuming worker has loaded it.
             setTimeout(() => URL.revokeObjectURL(imageUrl), 1000);
           }
         }, 0);
-
 
     }, [imageFile, localModelStatus, initializeLocalGenerator, toast]);
     
@@ -354,12 +268,17 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         if (!imageFile) return;
 
         setIsGenerating(true);
+        setGenerationStatus('正在连接服务器...');
+        setGenerationProgress(10);
         const errorHint = "可能的原因：1. 你的网络连接存在问题 2. 达到了API调用频率限制";
         let eventSource: EventSource | null = null;
         
         const effectiveApiUrl = currentApiUrl || defaultApiUrl;
 
         try {
+            setGenerationStatus('正在上传照片...');
+            setGenerationProgress(20);
+            
             const formData = new FormData();
             formData.append('files', imageFile);
 
@@ -377,6 +296,9 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 throw new Error('文件上传后未收到有效的文件路径。');
             }
             
+            setGenerationStatus('正在生成深度图...');
+            setGenerationProgress(40);
+
             const requestData = {
                 data: [{ path: uploadResult[0] }]
             };
@@ -398,10 +320,13 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 throw new Error('无法从响应中获取 event_id。');
             }
 
+            setGenerationProgress(60);
+            
             eventSource = new EventSource(`${effectiveApiUrl}/call/on_submit/${eventId}`);
             
             eventSource.addEventListener('complete', async (event) => {
                 if (eventSource) eventSource.close();
+                setGenerationProgress(80);
 
                 const dataStr = (event as MessageEvent).data;
                 const outputData = JSON.parse(dataStr);
@@ -417,8 +342,10 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                             }
                             const imageBlob = await imageResponse.blob();
                             const generatedFile = new File([imageBlob], "generated-depth-map.png", { type: imageBlob.type });
-                            setDepthMapFile(generatedFile);
-                            toast({ title: "成功", description: "深度图已生成并载入。" });
+                            setGenerationProgress(100);
+                            setGenerationStatus('深度图生成完成');
+                            toast({ title: "成功", description: "深度图已生成，正在进入3D场景..." });
+                            onFilesSelected(imageFile, generatedFile);
                         } catch(e) {
                              if (e instanceof Error) {
                                 toast({ variant: "destructive", title: "错误", description: `下载生成的深度图时出错: ${e.message}. ${errorHint}` });
@@ -433,12 +360,12 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 setIsGenerating(false);
             });
 
-
             eventSource.onerror = (err) => {
                 console.error("EventSource failed:", err);
                 if (eventSource) eventSource.close();
                 toast({ variant: "destructive", title: "错误", description: `获取结果时发生错误。 ${errorHint}` });
                 setIsGenerating(false);
+                setGenerationProgress(0);
             };
 
         } catch (error) {
@@ -451,26 +378,16 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 description: `${errorMessage}. ${errorHint}` 
             });
             setIsGenerating(false);
+            setGenerationProgress(0);
         }
     };
 
     const helpDialogContent = (
          <DialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="sm:max-w-[525px] max-h-[80vh] flex flex-col">
             <DialogHeader>
-                <DialogTitle>关于“生成深度图”</DialogTitle>
-                <DialogDescription asChild>
-                   <div>
-                        此功能将照片发送到以下API地址进行处理，这是一个开源模型，你也可以查阅
-                        <a 
-                            href="https://huggingface.co/spaces/depth-anything/Depth-Anything-V2" 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-primary underline hover:text-primary/80"
-                        >
-                            官方文档
-                        </a>
-                        本地部署。
-                   </div>
+                <DialogTitle>深度图生成设置</DialogTitle>
+                <DialogDescription>
+                    上传照片后将自动生成深度图。你可以选择本地生成或使用远程API。
                 </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4 overflow-y-auto px-1">
@@ -483,13 +400,14 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                         value={apiUrl}
                         onChange={(e) => setApiUrl(e.target.value)}
                         placeholder={defaultApiUrl}
+                        disabled={useLocalGenerator}
                     />
                 </div>
                 <Separator className="my-4"/>
                 <div className="space-y-4">
                     <div className="flex items-center space-x-2">
                         <Switch id="local-generation-switch" checked={useLocalGenerator} onCheckedChange={handleUseLocalChange}/>
-                        <Label htmlFor="local-generation-switch" className="font-bold">在浏览器本地生成(beta)</Label>
+                        <Label htmlFor="local-generation-switch" className="font-bold">在浏览器本地生成</Label>
                     </div>
                      <p className="text-sm text-muted-foreground">
                         启用此选项后，生成深度图功能将完全在浏览器本地进行，生成过程中设备内存占用会短暂升高，根据处理器性能单张处理时长可能在几秒到十几秒不等。首次使用此功能需要连接到国际互联网下载模型。
@@ -526,14 +444,13 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                                     <SelectItem value="onnx-community/depth-anything-v2-small">Small (速度最快)</SelectItem>
                                     <SelectItem value="onnx-community/depth-anything-v2-base">Base (中等)</SelectItem>
                                     <SelectItem value="onnx-community/depth-anything-v2-large">Large (效果较好)</SelectItem>
-                                    {/* <SelectItem value="onnx-community/DepthPro-ONNX">DepthPro (效果最好，由 Apple 开源)</SelectItem> */}
                                 </SelectContent>
                             </Select>
                         </div>
                         {useLocalGenerator && (
                             <div className="text-sm flex justify-between">
                                 <div>
-                                    <span className="font-semibold">下载状态:</span> <span className="text-muted-foreground">{localModelStatus}</span>
+                                    <span className="font-semibold">模型状态:</span> <span className="text-muted-foreground">{localModelStatus}</span>
                                 </div>
                             </div>
                         )}
@@ -547,48 +464,83 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         <Card className="w-full max-w-2xl bg-card/80 backdrop-blur-sm border-border/50 shadow-2xl shadow-black/20">
             <CardHeader className="text-center relative">
                 <div className="absolute top-4 right-4 flex items-center gap-2">
+                    <Dialog>
+                        <DialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <Info className="h-5 w-5" />
+                            </Button>
+                        </DialogTrigger>
+                        {helpDialogContent}
+                    </Dialog>
                     <Link href="/about" passHref>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Info className="h-5 w-5" />
+                            <FileImage className="h-5 w-5" />
                         </Button>
                     </Link>
                 </div>
                 <CardTitle className="text-3xl font-bold">空间照片构建器</CardTitle>
                 <CardDescription className="pt-2">
-                    上传照片和深度图（Depth Map），为你创建身临其境的空间照片效果。
+                    上传照片，自动生成深度图，为你创建身临其境的空间照片效果。
                 </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FileInputBox 
-                        id="image-upload" 
-                        onFileSelect={setImageFile} 
-                        acceptedFile={imageFile} 
-                        label="照片" 
-                        description=""
-                        icon={<FileImage className="w-10 h-10 mb-3 text-muted-foreground" />}
-                        showGenerateButton={true}
-                        onGenerateClick={handleGenerateClick}
-                        isGenerating={isGenerating}
-                        isLocalGenerating={isLocalGenerating}
-                        showHelpButton={true}
-                        helpDialogContent={helpDialogContent}
-                    />
-                    <FileInputBox 
-                        id="depth-map-upload" 
-                        onFileSelect={setDepthMapFile} 
-                        acceptedFile={depthMapFile} 
-                        label="深度图 (灰度)" 
-                        description="颜色从深到浅表示距离由远及近"
-                        icon={<UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />}
-                    />
+            <CardContent className="space-y-6">
+                <div className="space-y-2">
+                    <div className='flex items-center justify-between h-9'>
+                        <label htmlFor="image-upload" className="block text-sm font-medium text-foreground">上传照片</label>
+                        {isGenerating && (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                {generationStatus}
+                            </span>
+                        )}
+                    </div>
+                    <label
+                        htmlFor="image-upload"
+                        className={cn(
+                            "relative group flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-muted/50 border-border transition-colors overflow-hidden",
+                            isDragging && "border-primary bg-primary/10"
+                        )}
+                        onDragEnter={handleDragEnter}
+                        onDragLeave={handleDragLeave}
+                        onDragOver={handleDragEnter}
+                        onDrop={handleDrop}
+                    >
+                        {imageFile && previewUrl ? (
+                            <>
+                                <img src={previewUrl} alt="Preview" className="h-full w-full object-contain" />
+                                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <p className="text-sm text-white font-semibold max-w-full truncate px-2">{imageFile.name}</p>
+                                    <p className="text-xs text-gray-300">点击或拖动来更换</p>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
+                                <UploadCloud className="w-12 h-12 mb-4 text-muted-foreground" />
+                                <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold text-primary">点击上传</span> 或拖放文件</p>
+                                <p className="text-xs text-muted-foreground">支持 PNG, JPG, 或 WEBP</p>
+                            </div>
+                        )}
+                        <input id="image-upload" type="file" className="hidden" onChange={handleFileChange} accept="image/png, image/jpeg, image/webp" disabled={isGenerating} />
+                    </label>
                 </div>
-                <Button onClick={handleSubmit} disabled={!imageFile || !depthMapFile} size="lg" className="w-full text-lg py-6">
-                    构建3D场景
-                </Button>
+                
+                {isGenerating && (
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">{generationStatus}</span>
+                            <span className="font-medium">{Math.round(generationProgress)}%</span>
+                        </div>
+                        <Progress value={generationProgress} className="h-2" />
+                    </div>
+                )}
+                
+                {!isGenerating && imageFile && (
+                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                        <Sparkles className="h-4 w-4" />
+                        <span>深度图将自动生成...</span>
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
 }
-
-    

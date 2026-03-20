@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -38,9 +37,64 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { useToast } from '@/hooks/use-toast';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 type RenderMode = 'blur' | 'fill';
 type CameraType = 'perspective' | 'orthographic';
+
+interface PBRSettings {
+  metalness: number;
+  roughness: number;
+  normalIntensity: number;
+  emissiveIntensity: number;
+  emissiveColor: string;
+  opacity: number;
+  transmission: number;
+  ior: number;
+  thickness: number;
+}
+
+interface PostProcessingSettings {
+  bloomEnabled: boolean;
+  bloomStrength: number;
+  bloomRadius: number;
+  bloomThreshold: number;
+  dofEnabled: boolean;
+  dofFocusDistance: number;
+  dofFocalLength: number;
+  dofBokehScale: number;
+  toneMapping: 'none' | 'linear' | 'reinhard' | 'cineon' | 'aces';
+  saturation: number;
+  contrast: number;
+  brightness: number;
+}
+
+const defaultPBRSettings: PBRSettings = {
+  metalness: 0.0,
+  roughness: 0.5,
+  normalIntensity: 1.0,
+  emissiveIntensity: 0.0,
+  emissiveColor: '#ffffff',
+  opacity: 1.0,
+  transmission: 0.0,
+  ior: 1.5,
+  thickness: 0.5,
+};
+
+const defaultPostProcessingSettings: PostProcessingSettings = {
+  bloomEnabled: false,
+  bloomStrength: 0.5,
+  bloomRadius: 0.4,
+  bloomThreshold: 0.8,
+  dofEnabled: false,
+  dofFocusDistance: 2.0,
+  dofFocalLength: 0.02,
+  dofBokehScale: 1.0,
+  toneMapping: 'aces',
+  saturation: 1.0,
+  contrast: 1.0,
+  brightness: 0.0,
+};
 
 export default function HomePage() {
   const [image, setImage] = useState<string | null>(null);
@@ -68,6 +122,10 @@ export default function HomePage() {
   const [isRecording, setIsRecording] = useState(false);
   const [isFillWarningOpen, setIsFillWarningOpen] = useState(false);
   const [scrollAreaKey, setScrollAreaKey] = useState(Date.now());
+  
+  const [pbrSettings, setPBRSettings] = useState<PBRSettings>(defaultPBRSettings);
+  const [postProcessingSettings, setPostProcessingSettings] = useState<PostProcessingSettings>(defaultPostProcessingSettings);
+  
   const sceneRef = useRef<DepthWeaverSceneHandle>(null);
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -128,6 +186,8 @@ export default function HomePage() {
     if (depthMap) URL.revokeObjectURL(depthMap);
     setImage(null);
     setDepthMap(null);
+    setPBRSettings(defaultPBRSettings);
+    setPostProcessingSettings(defaultPostProcessingSettings);
   }, [image, depthMap]);
   
   const handleLoadFromHistory = (entry: HistoryDbEntry) => {
@@ -216,6 +276,14 @@ export default function HomePage() {
     setScrollAreaKey(Date.now());
   };
 
+  const updatePBRSetting = <K extends keyof PBRSettings>(key: K, value: PBRSettings[K]) => {
+    setPBRSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const updatePostProcessingSetting = <K extends keyof PostProcessingSettings>(key: K, value: PostProcessingSettings[K]) => {
+    setPostProcessingSettings(prev => ({ ...prev, [key]: value }));
+  };
+
   const isSceneVisible = image && depthMap;
 
   return (
@@ -273,6 +341,8 @@ export default function HomePage() {
               renderMode={renderMode}
               selectionRange={selectionRange}
               cameraType={cameraType}
+              pbrSettings={pbrSettings}
+              postProcessingSettings={postProcessingSettings}
               onDistanceChange={setCameraDistance}
               onZoomChange={setOrthographicZoom}
             />
@@ -331,39 +401,103 @@ export default function HomePage() {
                     <SheetTitle className="text-xl">控制面板</SheetTitle>
                   </SheetHeader>
                   <ScrollArea key={scrollAreaKey} className="flex-1 pr-6 -mr-6" viewportRef={scrollAreaRef}>
-                    <div className="py-6 space-y-6">
-                      <div className="flex items-center justify-between rounded-lg p-3 bg-muted/50">
-                        <Label htmlFor="sensor-mode" className="font-semibold">
-                          跟随传感器方向
-                        </Label>
-                        <Switch
-                          id="sensor-mode"
-                          checked={useSensor}
-                          onCheckedChange={setUseSensor}
-                          disabled={!sensorSupported || isRecording}
-                        />
-                      </div>
-                      {!sensorSupported && <p className="text-xs text-center text-destructive">您的设备不支持方向传感器。</p>}
-                      
-                      <div className="space-y-4 rounded-lg p-3 bg-muted/50">
-                        <Label className="font-semibold">渲染模式</Label>
-                         <RadioGroup value={renderMode} onValueChange={handleRenderModeChange} className="grid grid-cols-2 gap-2">
-                            <div>
-                              <RadioGroupItem value="blur" id="mode-blur" className="peer sr-only" />
-                              <Label htmlFor="mode-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
-                                边界模糊
-                              </Label>
+                    <div className="py-6 space-y-4">
+                      <Accordion type="multiple" defaultValue={['camera', 'render']} className="w-full space-y-2">
+                        
+                        <AccordionItem value="camera" className="border rounded-lg bg-muted/50 px-4">
+                          <AccordionTrigger className="hover:no-underline">
+                            <Label className="font-semibold">相机设置</Label>
+                          </AccordionTrigger>
+                          <AccordionContent className="space-y-4 pt-2">
+                            <div className="flex flex-col gap-2">
+                              <RadioGroup value={cameraType} onValueChange={(value) => setCameraType(value as CameraType)} className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <RadioGroupItem value="perspective" id="cam-perspective" className="peer sr-only" />
+                                  <Label htmlFor="cam-perspective" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                    透视相机
+                                  </Label>
+                                </div>
+                                <div>
+                                  <RadioGroupItem value="orthographic" id="cam-orthographic" className="peer sr-only" />
+                                  <Label htmlFor="cam-orthographic" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                    正交相机
+                                  </Label>
+                                </div>
+                              </RadioGroup>
                             </div>
-                            <div>
-                              <RadioGroupItem value="fill" id="mode-fill" className="peer sr-only" />
-                              <Label htmlFor="mode-fill" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
-                                背景填充(beta)
-                              </Label>
+                            <div className="flex flex-col gap-2">
+                              <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
+                              <Slider 
+                                id="depth-slider"
+                                min={0}
+                                max={5}
+                                step={0.01}
+                                value={[depthMultiplier]}
+                                onValueChange={(value) => setDepthMultiplier(value[0])}
+                              />
                             </div>
-                          </RadioGroup>
-                          <div className={cn("space-y-4", { 'hidden': renderMode !== 'blur' })}>
-                               <p className="text-xs text-muted-foreground">对于深度变化较大处，为缓解像素拉伸带来的撕裂感，将拉伸的像素进行模糊处理</p>
-                               <div className="flex flex-col gap-2">
+                            {cameraType === 'perspective' && (
+                                <div className="flex flex-col gap-2">
+                                    <Label htmlFor="zoom-slider" className="text-center">距离: {cameraDistance.toFixed(2)}</Label>
+                                    <Slider
+                                    id="zoom-slider"
+                                    min={0.5}
+                                    max={5}
+                                    step={0.01}
+                                    value={[cameraDistance]}
+                                    onValueChange={(value) => setCameraDistance(value[0])}
+                                    />
+                                </div>
+                            )}
+                            {cameraType === 'orthographic' && (
+                                <div className="flex flex-col gap-2">
+                                    <Label htmlFor="ortho-zoom-slider" className="text-center">缩放: {orthographicZoom.toFixed(2)}</Label>
+                                    <Slider
+                                    id="ortho-zoom-slider"
+                                    min={0.1}
+                                    max={5}
+                                    step={0.01}
+                                    value={[orthographicZoom]}
+                                    onValueChange={(value) => setOrthographicZoom(value[0])}
+                                    />
+                                </div>
+                            )}
+                            <div className="flex flex-col gap-2">
+                              <Label htmlFor="angle-limit-slider" className="text-center">视角限制: {viewAngleLimit}°</Label>
+                              <Slider
+                                id="angle-limit-slider"
+                                min={0}
+                                max={90}
+                                step={1}
+                                value={[viewAngleLimit]}
+                                onValueChange={(value) => setViewAngleLimit(value[0])}
+                              />
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+
+                        <AccordionItem value="render" className="border rounded-lg bg-muted/50 px-4">
+                          <AccordionTrigger className="hover:no-underline">
+                            <Label className="font-semibold">渲染模式</Label>
+                          </AccordionTrigger>
+                          <AccordionContent className="space-y-4 pt-2">
+                            <RadioGroup value={renderMode} onValueChange={handleRenderModeChange} className="grid grid-cols-2 gap-2">
+                              <div>
+                                <RadioGroupItem value="blur" id="mode-blur" className="peer sr-only" />
+                                <Label htmlFor="mode-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                  边界模糊
+                                </Label>
+                              </div>
+                              <div>
+                                <RadioGroupItem value="fill" id="mode-fill" className="peer sr-only" />
+                                <Label htmlFor="mode-fill" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                  背景填充(beta)
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                            <div className={cn("space-y-4", { 'hidden': renderMode !== 'blur' })}>
+                              <p className="text-xs text-muted-foreground">对于深度变化较大处，为缓解像素拉伸带来的撕裂感，将拉伸的像素进行模糊处理</p>
+                              <div className="flex flex-col gap-2">
                                 <Label htmlFor="blur-slider" className="text-center">模糊强度: {blurIntensity.toFixed(1)}</Label>
                                 <Slider
                                   id="blur-slider"
@@ -386,138 +520,302 @@ export default function HomePage() {
                                 />
                               </div>
                             </div>
-                           <div className={cn("space-y-4", { 'hidden': renderMode !== 'fill' })}>
-                                <p className="text-xs text-muted-foreground">从较远处的像素选取颜色，填充背景中原本被遮住的部分</p>
+                          </AccordionContent>
+                        </AccordionItem>
+
+                        <AccordionItem value="pbr" className="border rounded-lg bg-muted/50 px-4">
+                          <AccordionTrigger className="hover:no-underline">
+                            <Label className="font-semibold">PBR 材质</Label>
+                          </AccordionTrigger>
+                          <AccordionContent className="space-y-4 pt-2">
+                            <div className="flex flex-col gap-2">
+                              <Label className="text-center">金属度: {pbrSettings.metalness.toFixed(2)}</Label>
+                              <Slider
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={[pbrSettings.metalness]}
+                                onValueChange={(value) => updatePBRSetting('metalness', value[0])}
+                              />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <Label className="text-center">粗糙度: {pbrSettings.roughness.toFixed(2)}</Label>
+                              <Slider
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={[pbrSettings.roughness]}
+                                onValueChange={(value) => updatePBRSetting('roughness', value[0])}
+                              />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <Label className="text-center">法线强度: {pbrSettings.normalIntensity.toFixed(2)}</Label>
+                              <Slider
+                                min={0}
+                                max={3}
+                                step={0.01}
+                                value={[pbrSettings.normalIntensity]}
+                                onValueChange={(value) => updatePBRSetting('normalIntensity', value[0])}
+                              />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <Label className="text-center">自发光强度: {pbrSettings.emissiveIntensity.toFixed(2)}</Label>
+                              <Slider
+                                min={0}
+                                max={2}
+                                step={0.01}
+                                value={[pbrSettings.emissiveIntensity]}
+                                onValueChange={(value) => updatePBRSetting('emissiveIntensity', value[0])}
+                              />
+                            </div>
+                            <div className="flex items-center gap-4 rounded-lg p-3 bg-background/30">
+                              <Label className="font-semibold">发光颜色</Label>
+                              <input
+                                type="color"
+                                value={pbrSettings.emissiveColor}
+                                onChange={(e) => updatePBRSetting('emissiveColor', e.target.value)}
+                                className="w-24 h-8 p-0 bg-transparent border-none cursor-pointer"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <Label className="text-center">透明度: {pbrSettings.opacity.toFixed(2)}</Label>
+                              <Slider
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={[pbrSettings.opacity]}
+                                onValueChange={(value) => updatePBRSetting('opacity', value[0])}
+                              />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <Label className="text-center">折射率: {pbrSettings.ior.toFixed(2)}</Label>
+                              <Slider
+                                min={1}
+                                max={3}
+                                step={0.01}
+                                value={[pbrSettings.ior]}
+                                onValueChange={(value) => updatePBRSetting('ior', value[0])}
+                              />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <Label className="text-center">透射强度: {pbrSettings.transmission.toFixed(2)}</Label>
+                              <Slider
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                value={[pbrSettings.transmission]}
+                                onValueChange={(value) => updatePBRSetting('transmission', value[0])}
+                              />
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+
+                        <AccordionItem value="postprocess" className="border rounded-lg bg-muted/50 px-4">
+                          <AccordionTrigger className="hover:no-underline">
+                            <Label className="font-semibold">后期处理</Label>
+                          </AccordionTrigger>
+                          <AccordionContent className="space-y-4 pt-2">
+                            <div className="flex items-center justify-between rounded-lg p-3 bg-background/30">
+                              <Label htmlFor="bloom-switch" className="font-semibold">Bloom 辉光</Label>
+                              <Switch
+                                id="bloom-switch"
+                                checked={postProcessingSettings.bloomEnabled}
+                                onCheckedChange={(checked) => updatePostProcessingSetting('bloomEnabled', checked)}
+                              />
+                            </div>
+                            {postProcessingSettings.bloomEnabled && (
+                              <div className="space-y-4 pl-2">
                                 <div className="flex flex-col gap-2">
-                                <Label htmlFor="selection-range-slider" className="text-center">选区范围: {selectionRange}</Label>
-                                <Slider
-                                  id="selection-range-slider"
-                                  min={1}
-                                  max={20}
-                                  step={1}
-                                  value={[selectionRange]}
-                                  onValueChange={(value) => setSelectionRange(value[0])}
-                                />
+                                  <Label className="text-center">强度: {postProcessingSettings.bloomStrength.toFixed(2)}</Label>
+                                  <Slider
+                                    min={0}
+                                    max={3}
+                                    step={0.01}
+                                    value={[postProcessingSettings.bloomStrength]}
+                                    onValueChange={(value) => updatePostProcessingSetting('bloomStrength', value[0])}
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                  <Label className="text-center">半径: {postProcessingSettings.bloomRadius.toFixed(2)}</Label>
+                                  <Slider
+                                    min={0}
+                                    max={2}
+                                    step={0.01}
+                                    value={[postProcessingSettings.bloomRadius]}
+                                    onValueChange={(value) => updatePostProcessingSetting('bloomRadius', value[0])}
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                  <Label className="text-center">阈值: {postProcessingSettings.bloomThreshold.toFixed(2)}</Label>
+                                  <Slider
+                                    min={0}
+                                    max={1}
+                                    step={0.01}
+                                    value={[postProcessingSettings.bloomThreshold]}
+                                    onValueChange={(value) => updatePostProcessingSetting('bloomThreshold', value[0])}
+                                  />
+                                </div>
                               </div>
+                            )}
+                            
+                            <div className="flex items-center justify-between rounded-lg p-3 bg-background/30">
+                              <Label htmlFor="dof-switch" className="font-semibold">景深效果</Label>
+                              <Switch
+                                id="dof-switch"
+                                checked={postProcessingSettings.dofEnabled}
+                                onCheckedChange={(checked) => updatePostProcessingSetting('dofEnabled', checked)}
+                              />
                             </div>
-                      </div>
-                      
-                      <div className="space-y-4 rounded-lg p-3 bg-muted/50">
-                        <Label className="font-semibold">相机设置</Label>
-                        <div className="flex flex-col gap-2">
-                          <RadioGroup value={cameraType} onValueChange={(value) => setCameraType(value as CameraType)} className="grid grid-cols-2 gap-2">
-                            <div>
-                              <RadioGroupItem value="perspective" id="cam-perspective" className="peer sr-only" />
-                              <Label htmlFor="cam-perspective" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
-                                透视相机
-                              </Label>
-                            </div>
-                            <div>
-                              <RadioGroupItem value="orthographic" id="cam-orthographic" className="peer sr-only" />
-                              <Label htmlFor="cam-orthographic" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
-                                正交相机
-                              </Label>
-                            </div>
-                          </RadioGroup>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="depth-slider" className="text-center">深度: {depthMultiplier.toFixed(2)}</Label>
-                          <Slider 
-                            id="depth-slider"
-                            min={0}
-                            max={5}
-                            step={0.01}
-                            value={[depthMultiplier]}
-                            onValueChange={(value) => setDepthMultiplier(value[0])}
-                          />
-                        </div>
-                        {cameraType === 'perspective' && (
-                            <div className="flex flex-col gap-2">
-                                <Label htmlFor="zoom-slider" className="text-center">距离: {cameraDistance.toFixed(2)}</Label>
-                                <Slider
-                                id="zoom-slider"
-                                min={0.5}
-                                max={5}
-                                step={0.01}
-                                value={[cameraDistance]}
-                                onValueChange={(value) => setCameraDistance(value[0])}
-                                />
-                            </div>
-                        )}
-                        {cameraType === 'orthographic' && (
-                            <div className="flex flex-col gap-2">
-                                <Label htmlFor="ortho-zoom-slider" className="text-center">缩放: {orthographicZoom.toFixed(2)}</Label>
-                                <Slider
-                                id="ortho-zoom-slider"
-                                min={0.1}
-                                max={5}
-                                step={0.01}
-                                value={[orthographicZoom]}
-                                onValueChange={(value) => setOrthographicZoom(value[0])}
-                                />
-                            </div>
-                        )}
-                        <div className="flex flex-col gap-2">
-                          <Label htmlFor="angle-limit-slider" className="text-center">视角限制: {viewAngleLimit}°</Label>
-                          <Slider
-                            id="angle-limit-slider"
-                            min={0}
-                            max={90}
-                            step={1}
-                            value={[viewAngleLimit]}
-                            onValueChange={(value) => setViewAngleLimit(value[0])}
-                          />
-                        </div>
-                      </div>
+                            {postProcessingSettings.dofEnabled && (
+                              <div className="space-y-4 pl-2">
+                                <div className="flex flex-col gap-2">
+                                  <Label className="text-center">焦距: {postProcessingSettings.dofFocusDistance.toFixed(2)}</Label>
+                                  <Slider
+                                    min={0.1}
+                                    max={10}
+                                    step={0.01}
+                                    value={[postProcessingSettings.dofFocusDistance]}
+                                    onValueChange={(value) => updatePostProcessingSetting('dofFocusDistance', value[0])}
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                  <Label className="text-center">模糊强度: {postProcessingSettings.dofBokehScale.toFixed(2)}</Label>
+                                  <Slider
+                                    min={0}
+                                    max={5}
+                                    step={0.01}
+                                    value={[postProcessingSettings.dofBokehScale]}
+                                    onValueChange={(value) => updatePostProcessingSetting('dofBokehScale', value[0])}
+                                  />
+                                </div>
+                              </div>
+                            )}
 
-                      <div className="space-y-4 rounded-lg p-3 bg-muted/50">
-                        <Label className="font-semibold">高级设置</Label>
-                         <div className="flex flex-col gap-2">
-                          <Label className="text-center">背景</Label>
-                            <RadioGroup value={backgroundMode} onValueChange={(value) => handleBackgroundModeChange(value as 'blur' | 'solid')} className="grid grid-cols-2 gap-2">
-                              <div>
-                                <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" disabled={backgroundMode === 'blur'} />
-                                <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
-                                  模糊背景
-                                </Label>
-                              </div>
-                              <div>
-                                <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" disabled={backgroundMode === 'solid'} />
-                                <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
-                                  纯色
-                                </Label>
-                              </div>
-                            </RadioGroup>
-                        </div>
-                        <div className={cn("flex items-center gap-4 rounded-lg p-3 bg-background/30", { 'hidden': backgroundMode !== 'solid' })}>
-                          <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
-                          <input
-                            id="bg-color-picker"
-                            type="color"
-                            value={backgroundColor}
-                            onChange={(e) => setBackgroundColor(e.target.value)}
-                            className="w-24 h-8 p-0 bg-transparent border-none cursor-pointer"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Label className="text-center">网格细节</Label>
-                          <RadioGroup 
-                            value={String(meshDetail)} 
-                            onValueChange={handleMeshDetailChange} 
-                            className="grid grid-cols-3 gap-2"
-                          >
-                            {[512, 1024, 2048].map(detail => (
-                              <div key={detail}>
-                                <RadioGroupItem value={String(detail)} id={`mesh-${detail}`} className="peer sr-only" disabled={meshDetail === detail} />
-                                <Label htmlFor={`mesh-${detail}`} className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
-                                  {detail}
-                                </Label>
-                              </div>
-                            ))}
-                          </RadioGroup>
-                        </div>
-                      </div>
+                            <div className="flex flex-col gap-2">
+                              <Label className="text-center">色调映射</Label>
+                              <RadioGroup 
+                                value={postProcessingSettings.toneMapping} 
+                                onValueChange={(value) => updatePostProcessingSetting('toneMapping', value as PostProcessingSettings['toneMapping'])}
+                                className="grid grid-cols-2 gap-2"
+                              >
+                                {[
+                                  { value: 'none', label: '无' },
+                                  { value: 'linear', label: '线性' },
+                                  { value: 'reinhard', label: 'Reinhard' },
+                                  { value: 'aces', label: 'ACES' },
+                                ].map(({ value, label }) => (
+                                  <div key={value}>
+                                    <RadioGroupItem value={value} id={`tone-${value}`} className="peer sr-only" />
+                                    <Label htmlFor={`tone-${value}`} className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-2 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                      {label}
+                                    </Label>
+                                  </div>
+                                ))}
+                              </RadioGroup>
+                            </div>
 
+                            <div className="space-y-2">
+                              <Label className="font-semibold">色彩校正</Label>
+                              <div className="flex flex-col gap-2">
+                                <Label className="text-center">饱和度: {postProcessingSettings.saturation.toFixed(2)}</Label>
+                                <Slider
+                                  min={0}
+                                  max={2}
+                                  step={0.01}
+                                  value={[postProcessingSettings.saturation]}
+                                  onValueChange={(value) => updatePostProcessingSetting('saturation', value[0])}
+                                />
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <Label className="text-center">对比度: {postProcessingSettings.contrast.toFixed(2)}</Label>
+                                <Slider
+                                  min={0}
+                                  max={2}
+                                  step={0.01}
+                                  value={[postProcessingSettings.contrast]}
+                                  onValueChange={(value) => updatePostProcessingSetting('contrast', value[0])}
+                                />
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <Label className="text-center">亮度: {postProcessingSettings.brightness.toFixed(2)}</Label>
+                                <Slider
+                                  min={-1}
+                                  max={1}
+                                  step={0.01}
+                                  value={[postProcessingSettings.brightness]}
+                                  onValueChange={(value) => updatePostProcessingSetting('brightness', value[0])}
+                                />
+                              </div>
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+
+                        <AccordionItem value="advanced" className="border rounded-lg bg-muted/50 px-4">
+                          <AccordionTrigger className="hover:no-underline">
+                            <Label className="font-semibold">高级设置</Label>
+                          </AccordionTrigger>
+                          <AccordionContent className="space-y-4 pt-2">
+                            <div className="flex items-center justify-between rounded-lg p-3 bg-background/50">
+                              <Label htmlFor="sensor-mode" className="font-semibold">
+                                跟随传感器方向
+                              </Label>
+                              <Switch
+                                id="sensor-mode"
+                                checked={useSensor}
+                                onCheckedChange={setUseSensor}
+                                disabled={!sensorSupported || isRecording}
+                              />
+                            </div>
+                            {!sensorSupported && <p className="text-xs text-center text-destructive">您的设备不支持方向传感器。</p>}
+                            
+                            <div className="flex flex-col gap-2">
+                              <Label className="text-center">背景</Label>
+                              <RadioGroup value={backgroundMode} onValueChange={(value) => handleBackgroundModeChange(value as 'blur' | 'solid')} className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" disabled={backgroundMode === 'blur'} />
+                                  <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                    模糊背景
+                                  </Label>
+                                </div>
+                                <div>
+                                  <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" disabled={backgroundMode === 'solid'} />
+                                  <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                    纯色
+                                  </Label>
+                                </div>
+                              </RadioGroup>
+                            </div>
+                            <div className={cn("flex items-center gap-4 rounded-lg p-3 bg-background/30", { 'hidden': backgroundMode !== 'solid' })}>
+                              <Label htmlFor="bg-color-picker" className="font-semibold">背景颜色</Label>
+                              <input
+                                id="bg-color-picker"
+                                type="color"
+                                value={backgroundColor}
+                                onChange={(e) => setBackgroundColor(e.target.value)}
+                                className="w-24 h-8 p-0 bg-transparent border-none cursor-pointer"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <Label className="text-center">网格细节</Label>
+                              <RadioGroup 
+                                value={String(meshDetail)} 
+                                onValueChange={handleMeshDetailChange} 
+                                className="grid grid-cols-3 gap-2"
+                              >
+                                {[512, 1024, 2048].map(detail => (
+                                  <div key={detail}>
+                                    <RadioGroupItem value={String(detail)} id={`mesh-${detail}`} className="peer sr-only" disabled={meshDetail === detail} />
+                                    <Label htmlFor={`mesh-${detail}`} className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                      {detail}
+                                    </Label>
+                                  </div>
+                                ))}
+                              </RadioGroup>
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+
+                      </Accordion>
                     </div>
                   </ScrollArea>
                 </SheetContent>
