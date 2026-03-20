@@ -69,6 +69,29 @@ export default function HomePage() {
   const [isFillWarningOpen, setIsFillWarningOpen] = useState(false);
   const [scrollAreaKey, setScrollAreaKey] = useState(Date.now());
   const sceneRef = useRef<DepthWeaverSceneHandle>(null);
+  
+  // PBR 材质参数
+  const [metalness, setMetalness] = useState(0.0);
+  const [roughness, setRoughness] = useState(0.8);
+  const [normalStrength, setNormalStrength] = useState(1.0);
+  const [emissiveIntensity, setEmissiveIntensity] = useState(0.0);
+  const [emissiveColor, setEmissiveColor] = useState('#ffffff');
+  const [opacity, setOpacity] = useState(1.0);
+
+  // 后期处理参数
+  const [bloomEnabled, setBloomEnabled] = useState(false);
+  const [bloomIntensity, setBloomIntensity] = useState(1.5);
+  const [bloomThreshold, setBloomThreshold] = useState(0.85);
+  const [bloomRadius, setBloomRadius] = useState(0.4);
+  const [dofEnabled, setDofEnabled] = useState(false);
+  const [dofFocus, setDofFocus] = useState(0.5);
+  const [dofAperture, setDofAperture] = useState(0.001);
+  const [dofMaxBlur, setDofMaxBlur] = useState(0.01);
+  const [toneMapping, setToneMapping] = useState('None');
+  const [toneMappingExposure, setToneMappingExposure] = useState(1.0);
+  const [saturation, setSaturation] = useState(1.0);
+  const [contrast, setContrast] = useState(1.0);
+  const [brightness, setBrightness] = useState(0.0);
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const scrollPositionRef = useRef(0);
@@ -273,6 +296,25 @@ export default function HomePage() {
               renderMode={renderMode}
               selectionRange={selectionRange}
               cameraType={cameraType}
+              metalness={metalness}
+              roughness={roughness}
+              normalStrength={normalStrength}
+              emissiveIntensity={emissiveIntensity}
+              emissiveColor={emissiveColor}
+              opacity={opacity}
+              bloomEnabled={bloomEnabled}
+              bloomIntensity={bloomIntensity}
+              bloomThreshold={bloomThreshold}
+              bloomRadius={bloomRadius}
+              dofEnabled={dofEnabled}
+              dofFocus={dofFocus}
+              dofAperture={dofAperture}
+              dofMaxBlur={dofMaxBlur}
+              toneMapping={toneMapping}
+              toneMappingExposure={toneMappingExposure}
+              saturation={saturation}
+              contrast={contrast}
+              brightness={brightness}
               onDistanceChange={setCameraDistance}
               onZoomChange={setOrthographicZoom}
             />
@@ -476,13 +518,13 @@ export default function HomePage() {
                           <Label className="text-center">背景</Label>
                             <RadioGroup value={backgroundMode} onValueChange={(value) => handleBackgroundModeChange(value as 'blur' | 'solid')} className="grid grid-cols-2 gap-2">
                               <div>
-                                <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" disabled={backgroundMode === 'blur'} />
+                                <RadioGroupItem value="blur" id="bg-blur" className="peer sr-only" />
                                 <Label htmlFor="bg-blur" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
                                   模糊背景
                                 </Label>
                               </div>
                               <div>
-                                <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" disabled={backgroundMode === 'solid'} />
+                                <RadioGroupItem value="solid" id="bg-solid" className="peer sr-only" />
                                 <Label htmlFor="bg-solid" className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
                                   纯色
                                 </Label>
@@ -508,13 +550,265 @@ export default function HomePage() {
                           >
                             {[512, 1024, 2048].map(detail => (
                               <div key={detail}>
-                                <RadioGroupItem value={String(detail)} id={`mesh-${detail}`} className="peer sr-only" disabled={meshDetail === detail} />
+                                <RadioGroupItem value={String(detail)} id={`mesh-${detail}`} className="peer sr-only" />
                                 <Label htmlFor={`mesh-${detail}`} className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-3 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
                                   {detail}
                                 </Label>
                               </div>
                             ))}
                           </RadioGroup>
+                        </div>
+                      </div>
+
+                      {/* PBR 材质设置 */}
+                      <div className="space-y-4 rounded-lg p-3 bg-muted/50">
+                        <Label className="font-semibold">PBR 材质设置</Label>
+                        
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="metalness-slider" className="text-center">金属度: {metalness.toFixed(2)}</Label>
+                          <Slider
+                            id="metalness-slider"
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            value={[metalness]}
+                            onValueChange={(value) => setMetalness(value[0])}
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="roughness-slider" className="text-center">粗糙度: {roughness.toFixed(2)}</Label>
+                          <Slider
+                            id="roughness-slider"
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            value={[roughness]}
+                            onValueChange={(value) => setRoughness(value[0])}
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="normal-slider" className="text-center">法线强度: {normalStrength.toFixed(2)}</Label>
+                          <Slider
+                            id="normal-slider"
+                            min={0}
+                            max={5}
+                            step={0.1}
+                            value={[normalStrength]}
+                            onValueChange={(value) => setNormalStrength(value[0])}
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="opacity-slider" className="text-center">透明度: {opacity.toFixed(2)}</Label>
+                          <Slider
+                            id="opacity-slider"
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            value={[opacity]}
+                            onValueChange={(value) => setOpacity(value[0])}
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="emissive-slider" className="text-center">自发光强度: {emissiveIntensity.toFixed(2)}</Label>
+                          <Slider
+                            id="emissive-slider"
+                            min={0}
+                            max={5}
+                            step={0.1}
+                            value={[emissiveIntensity]}
+                            onValueChange={(value) => setEmissiveIntensity(value[0])}
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-4 rounded-lg p-3 bg-background/30">
+                          <Label htmlFor="emissive-color-picker" className="font-semibold">自发光颜色</Label>
+                          <input
+                            id="emissive-color-picker"
+                            type="color"
+                            value={emissiveColor}
+                            onChange={(e) => setEmissiveColor(e.target.value)}
+                            className="w-24 h-8 p-0 bg-transparent border-none cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      {/* 后期处理设置 */}
+                      <div className="space-y-4 rounded-lg p-3 bg-muted/50">
+                        <Label className="font-semibold">后期处理</Label>
+
+                        {/* Bloom 辉光效果 */}
+                        <div className="space-y-3 rounded-lg p-3 bg-background/30">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="bloom-switch" className="font-semibold">Bloom 辉光</Label>
+                            <Switch
+                              id="bloom-switch"
+                              checked={bloomEnabled}
+                              onCheckedChange={setBloomEnabled}
+                            />
+                          </div>
+                          
+                          {bloomEnabled && (
+                            <div className="space-y-3">
+                              <div className="flex flex-col gap-2">
+                                <Label htmlFor="bloom-intensity-slider" className="text-center">强度: {bloomIntensity.toFixed(2)}</Label>
+                                <Slider
+                                  id="bloom-intensity-slider"
+                                  min={0}
+                                  max={5}
+                                  step={0.1}
+                                  value={[bloomIntensity]}
+                                  onValueChange={(value) => setBloomIntensity(value[0])}
+                                />
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <Label htmlFor="bloom-threshold-slider" className="text-center">阈值: {bloomThreshold.toFixed(2)}</Label>
+                                <Slider
+                                  id="bloom-threshold-slider"
+                                  min={0}
+                                  max={1}
+                                  step={0.01}
+                                  value={[bloomThreshold]}
+                                  onValueChange={(value) => setBloomThreshold(value[0])}
+                                />
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <Label htmlFor="bloom-radius-slider" className="text-center">半径: {bloomRadius.toFixed(2)}</Label>
+                                <Slider
+                                  id="bloom-radius-slider"
+                                  min={0}
+                                  max={2}
+                                  step={0.01}
+                                  value={[bloomRadius]}
+                                  onValueChange={(value) => setBloomRadius(value[0])}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 景深效果 */}
+                        <div className="space-y-3 rounded-lg p-3 bg-background/30">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="dof-switch" className="font-semibold">景深效果</Label>
+                            <Switch
+                              id="dof-switch"
+                              checked={dofEnabled}
+                              onCheckedChange={setDofEnabled}
+                            />
+                          </div>
+                          
+                          {dofEnabled && (
+                            <div className="space-y-3">
+                              <div className="flex flex-col gap-2">
+                                <Label htmlFor="dof-focus-slider" className="text-center">焦距: {dofFocus.toFixed(2)}</Label>
+                                <Slider
+                                  id="dof-focus-slider"
+                                  min={0}
+                                  max={1}
+                                  step={0.01}
+                                  value={[dofFocus]}
+                                  onValueChange={(value) => setDofFocus(value[0])}
+                                />
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <Label htmlFor="dof-aperture-slider" className="text-center">光圈: {dofAperture.toFixed(4)}</Label>
+                                <Slider
+                                  id="dof-aperture-slider"
+                                  min={0.0001}
+                                  max={0.01}
+                                  step={0.0001}
+                                  value={[dofAperture]}
+                                  onValueChange={(value) => setDofAperture(value[0])}
+                                />
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                <Label htmlFor="dof-maxblur-slider" className="text-center">最大模糊: {dofMaxBlur.toFixed(4)}</Label>
+                                <Slider
+                                  id="dof-maxblur-slider"
+                                  min={0.001}
+                                  max={0.05}
+                                  step={0.001}
+                                  value={[dofMaxBlur]}
+                                  onValueChange={(value) => setDofMaxBlur(value[0])}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 色调映射 */}
+                        <div className="space-y-3 rounded-lg p-3 bg-background/30">
+                          <Label className="font-semibold">色调映射</Label>
+                          <RadioGroup 
+                            value={toneMapping} 
+                            onValueChange={setToneMapping}
+                            className="grid grid-cols-2 gap-2"
+                          >
+                            {['None', 'ACESFilmic', 'Reinhard', 'Cineon'].map(mode => (
+                              <div key={mode}>
+                                <RadioGroupItem value={mode} id={`tone-${mode}`} className="peer sr-only" />
+                                <Label htmlFor={`tone-${mode}`} className="flex text-sm items-center justify-center rounded-md border-2 border-transparent bg-background/30 p-2 hover:bg-accent/80 hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-accent [&:has([data-state=checked])]:border-primary">
+                                  {mode}
+                                </Label>
+                              </div>
+                            ))}
+                          </RadioGroup>
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="exposure-slider" className="text-center">曝光: {toneMappingExposure.toFixed(2)}</Label>
+                            <Slider
+                              id="exposure-slider"
+                              min={0.1}
+                              max={3}
+                              step={0.1}
+                              value={[toneMappingExposure]}
+                              onValueChange={(value) => setToneMappingExposure(value[0])}
+                            />
+                          </div>
+                        </div>
+
+                        {/* 色彩校正 */}
+                        <div className="space-y-3 rounded-lg p-3 bg-background/30">
+                          <Label className="font-semibold">色彩校正</Label>
+                          
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="saturation-slider" className="text-center">饱和度: {saturation.toFixed(2)}</Label>
+                            <Slider
+                              id="saturation-slider"
+                              min={0}
+                              max={2}
+                              step={0.01}
+                              value={[saturation]}
+                              onValueChange={(value) => setSaturation(value[0])}
+                            />
+                          </div>
+                          
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="contrast-slider" className="text-center">对比度: {contrast.toFixed(2)}</Label>
+                            <Slider
+                              id="contrast-slider"
+                              min={0}
+                              max={2}
+                              step={0.01}
+                              value={[contrast]}
+                              onValueChange={(value) => setContrast(value[0])}
+                            />
+                          </div>
+                          
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="brightness-slider" className="text-center">亮度: {brightness.toFixed(2)}</Label>
+                            <Slider
+                              id="brightness-slider"
+                              min={-1}
+                              max={1}
+                              step={0.01}
+                              value={[brightness]}
+                              onValueChange={(value) => setBrightness(value[0])}
+                            />
+                          </div>
                         </div>
                       </div>
 

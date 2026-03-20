@@ -4,6 +4,11 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 type RenderMode = 'blur' | 'fill';
 type CameraType = 'perspective' | 'orthographic';
@@ -24,6 +29,26 @@ interface DepthWeaverSceneProps {
   renderMode: RenderMode;
   selectionRange: number;
   cameraType: CameraType;
+  metalness: number;
+  roughness: number;
+  normalStrength: number;
+  emissiveIntensity: number;
+  emissiveColor: string;
+  opacity: number;
+  // 后期处理参数
+  bloomEnabled: boolean;
+  bloomIntensity: number;
+  bloomThreshold: number;
+  bloomRadius: number;
+  dofEnabled: boolean;
+  dofFocus: number;
+  dofAperture: number;
+  dofMaxBlur: number;
+  toneMapping: string;
+  toneMappingExposure: number;
+  saturation: number;
+  contrast: number;
+  brightness: number;
   onDistanceChange: (distance: number) => void;
   onZoomChange: (zoom: number) => void;
 }
@@ -133,6 +158,9 @@ const liveVertexShader = `
   uniform sampler2D uDepthMap;
   uniform float uDepthMultiplier;
   varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  varying vec3 vWorldPosition;
   
   void main() {
     vUv = uv;
@@ -140,18 +168,170 @@ const liveVertexShader = `
     float depth = depthColor.r;
     float displacement = depth * uDepthMultiplier;
     vec3 newPosition = position + normal * displacement;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+    
+    vec4 mvPosition = modelViewMatrix * vec4(newPosition, 1.0);
+    vViewPosition = -mvPosition.xyz;
+    vWorldPosition = (modelMatrix * vec4(newPosition, 1.0)).xyz;
+    vNormal = normalize(normalMatrix * normal);
+    
+    gl_Position = projectionMatrix * mvPosition;
   }
 `;
 
 const liveFragmentShader = `
   uniform sampler2D uBakedTexture;
+  uniform sampler2D uDepthMap;
+  uniform float uMetalness;
+  uniform float uRoughness;
+  uniform float uEmissiveIntensity;
+  uniform vec3 uEmissiveColor;
+  uniform float uOpacity;
+  uniform float uNormalStrength;
   varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  varying vec3 vWorldPosition;
 
   void main() {
-    gl_FragColor = texture2D(uBakedTexture, vUv);
+    vec4 baseColor = texture2D(uBakedTexture, vUv);
+    
+    // 计算法线（从深度图）
+    float depth = texture2D(uDepthMap, vUv).r;
+    float depthL = texture2D(uDepthMap, vUv - vec2(0.001, 0.0)).r;
+    float depthR = texture2D(uDepthMap, vUv + vec2(0.001, 0.0)).r;
+    float depthU = texture2D(uDepthMap, vUv + vec2(0.0, 0.001)).r;
+    float depthD = texture2D(uDepthMap, vUv - vec2(0.0, 0.001)).r;
+    
+    vec3 normal = normalize(vNormal);
+    vec3 tangent = normalize(vec3(1.0, 0.0, (depthR - depthL) * uNormalStrength));
+    vec3 bitangent = normalize(vec3(0.0, 1.0, (depthU - depthD) * uNormalStrength));
+    mat3 TBN = mat3(tangent, bitangent, normal);
+    
+    // PBR 基础计算
+    vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
+    vec3 viewDir = normalize(-vViewPosition);
+    vec3 halfDir = normalize(lightDir + viewDir);
+    
+    // 菲涅尔效应
+    float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 5.0);
+    
+    // 漫反射
+    float diffuse = max(dot(normal, lightDir), 0.0);
+    
+    // 高光（GGX）
+    float roughness = max(uRoughness, 0.001);
+    float alpha = roughness * roughness;
+    float alpha2 = alpha * alpha;
+    float NdotH = max(dot(normal, halfDir), 0.0);
+    float denom = NdotH * NdotH * (alpha2 - 1.0) + 1.0;
+    float D = alpha2 / (3.14159 * denom * denom);
+    
+    // 环境光遮蔽（简单模拟）
+    float ao = 1.0 - depth * 0.3;
+    
+    // 最终颜色混合
+    vec3 diffuseColor = baseColor.rgb * (1.0 - uMetalness) * diffuse;
+    vec3 specularColor = mix(vec3(0.04), baseColor.rgb, uMetalness) * D * fresnel;
+    vec3 emissive = uEmissiveColor * uEmissiveIntensity;
+    
+    vec3 finalColor = (diffuseColor + specularColor) * ao + emissive;
+    
+    gl_FragColor = vec4(finalColor, baseColor.a * uOpacity);
   }
 `;
+
+// 色彩校正着色器
+const colorCorrectionShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    saturation: { value: 1.0 },
+    contrast: { value: 1.0 },
+    brightness: { value: 0.0 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float saturation;
+    uniform float contrast;
+    uniform float brightness;
+    varying vec2 vUv;
+    
+    void main() {
+      vec4 color = texture2D(tDiffuse, vUv);
+      
+      // 亮度调整
+      color.rgb += brightness;
+      
+      // 对比度调整
+      color.rgb = (color.rgb - 0.5) * contrast + 0.5;
+      
+      // 饱和度调整
+      float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+      color.rgb = mix(vec3(gray), color.rgb, saturation);
+      
+      gl_FragColor = color;
+    }
+  `,
+};
+
+// 景深着色器
+const DepthOfFieldShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    focus: { value: 0.5 },
+    aperture: { value: 0.001 },
+    maxBlur: { value: 0.01 }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float focus;
+    uniform float aperture;
+    uniform float maxBlur;
+    varying vec2 vUv;
+
+    void main() {
+      vec4 color = texture2D(tDiffuse, vUv);
+      
+      // 使用RGB通道的差异来模拟深度信息
+      // 基于原始图像和深度图的混合效果
+      float depth = color.r * 0.3 + color.g * 0.5 + color.b * 0.2;
+      
+      // 计算模糊量
+      float blur = abs(depth - focus) * aperture;
+      blur = clamp(blur, 0.0, maxBlur);
+      
+      // 简单的模糊效果 - 采样周围像素
+      vec4 finalColor = color;
+      float total = 1.0;
+      
+      // 环形采样
+      for(float i = 1.0; i < 12.0; i++) {
+        float angle = i * 0.5236; // 30度间隔
+        float radius = blur * i / 12.0;
+        vec2 offset = vec2(cos(angle), sin(angle)) * radius;
+        
+        finalColor += texture2D(tDiffuse, vUv + offset);
+        finalColor += texture2D(tDiffuse, vUv - offset);
+        total += 2.0;
+      }
+      
+      gl_FragColor = finalColor / total;
+    }
+  `
+};
 
 
 export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSceneProps>(({ 
@@ -170,6 +350,26 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   renderMode,
   selectionRange,
   cameraType,
+  metalness,
+  roughness,
+  normalStrength,
+  emissiveIntensity,
+  emissiveColor,
+  opacity,
+  // 后期处理参数
+  bloomEnabled,
+  bloomIntensity,
+  bloomThreshold,
+  bloomRadius,
+  dofEnabled,
+  dofFocus,
+  dofAperture,
+  dofMaxBlur,
+  toneMapping,
+  toneMappingExposure,
+  saturation,
+  contrast,
+  brightness,
   onDistanceChange,
   onZoomChange
 }, ref) => {
@@ -187,6 +387,14 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   const liveMaterialRef = useRef<THREE.ShaderMaterial>();
   const bakingMaterialRef = useRef<THREE.ShaderMaterial>();
   const bakedTextureRef = useRef<THREE.WebGLRenderTarget>();
+
+  // 后期处理
+  const composerRef = useRef<EffectComposer>();
+  const bloomPassRef = useRef<UnrealBloomPass>();
+  const dofPassRef = useRef<ShaderPass>();
+  const colorCorrectionPassRef = useRef<ShaderPass>();
+  const depthPassRef = useRef<ShaderPass>();
+  const outputPassRef = useRef<OutputPass>();
 
   const maxAngleRef = useRef(THREE.MathUtils.degToRad(viewAngleLimit));
   
@@ -209,7 +417,11 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
       requestAnimationFrame(() => {
         renderRequestedRef.current = false;
         if (rendererRef.current && sceneRef.current && cameraRef.current) {
-          rendererRef.current.render(sceneRef.current, cameraRef.current);
+          if (composerRef.current) {
+            composerRef.current.render();
+          } else {
+            rendererRef.current.render(sceneRef.current, cameraRef.current);
+          }
         }
       });
     }
@@ -485,6 +697,72 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
     }
   }, [blurIntensity, blurOffset, renderMode, runBakePass]);
 
+  // PBR 材质参数更新
+  useEffect(() => {
+    if (liveMaterialRef.current) {
+      liveMaterialRef.current.uniforms.uMetalness.value = metalness;
+      liveMaterialRef.current.uniforms.uRoughness.value = roughness;
+      liveMaterialRef.current.uniforms.uNormalStrength.value = normalStrength;
+      liveMaterialRef.current.uniforms.uEmissiveIntensity.value = emissiveIntensity;
+      liveMaterialRef.current.uniforms.uEmissiveColor.value = new THREE.Color(emissiveColor);
+      liveMaterialRef.current.uniforms.uOpacity.value = opacity;
+      requestRenderIfNotRequested();
+    }
+  }, [metalness, roughness, normalStrength, emissiveIntensity, emissiveColor, opacity, requestRenderIfNotRequested]);
+
+  // 后期处理参数更新
+  useEffect(() => {
+    if (bloomPassRef.current) {
+      bloomPassRef.current.enabled = bloomEnabled;
+      bloomPassRef.current.strength = bloomIntensity;
+      bloomPassRef.current.threshold = bloomThreshold;
+      bloomPassRef.current.radius = bloomRadius;
+      requestRenderIfNotRequested();
+    }
+  }, [bloomEnabled, bloomIntensity, bloomThreshold, bloomRadius, requestRenderIfNotRequested]);
+
+  // 色彩校正参数更新
+  useEffect(() => {
+    if (colorCorrectionPassRef.current) {
+      colorCorrectionPassRef.current.uniforms.saturation.value = saturation;
+      colorCorrectionPassRef.current.uniforms.contrast.value = contrast;
+      colorCorrectionPassRef.current.uniforms.brightness.value = brightness;
+      requestRenderIfNotRequested();
+    }
+  }, [saturation, contrast, brightness, requestRenderIfNotRequested]);
+
+  // 色调映射更新
+  useEffect(() => {
+    if (rendererRef.current) {
+      switch (toneMapping) {
+        case 'ACESFilmic':
+          rendererRef.current.toneMapping = THREE.ACESFilmicToneMapping;
+          break;
+        case 'Reinhard':
+          rendererRef.current.toneMapping = THREE.ReinhardToneMapping;
+          break;
+        case 'Cineon':
+          rendererRef.current.toneMapping = THREE.CineonToneMapping;
+          break;
+        default:
+          rendererRef.current.toneMapping = THREE.NoToneMapping;
+      }
+      rendererRef.current.toneMappingExposure = toneMappingExposure;
+      requestRenderIfNotRequested();
+    }
+  }, [toneMapping, toneMappingExposure, requestRenderIfNotRequested]);
+
+  // 景深参数更新
+  useEffect(() => {
+    if (dofPassRef.current) {
+      dofPassRef.current.enabled = dofEnabled;
+      dofPassRef.current.uniforms.focus.value = dofFocus;
+      dofPassRef.current.uniforms.aperture.value = dofAperture;
+      dofPassRef.current.uniforms.maxBlur.value = dofMaxBlur;
+      requestRenderIfNotRequested();
+    }
+  }, [dofEnabled, dofFocus, dofAperture, dofMaxBlur, requestRenderIfNotRequested]);
+
   useEffect(() => {
     if (!cameraRef.current || cameraRef.current.type.toLowerCase().startsWith(cameraType)) return;
 
@@ -643,6 +921,49 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         camera.updateProjectionMatrix();
     }
     cameraRef.current = camera;
+
+    // 初始化后期处理
+    const composer = new EffectComposer(renderer);
+    composerRef.current = composer;
+
+    // 渲染通道
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    // Bloom 辉光效果
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(currentMount.clientWidth, currentMount.clientHeight),
+      1.5, // intensity
+      0.4, // radius
+      0.85 // threshold
+    );
+    bloomPass.enabled = false;
+    composer.addPass(bloomPass);
+    bloomPassRef.current = bloomPass;
+
+    // 景深效果
+    const dofPass = new ShaderPass({
+      uniforms: THREE.UniformsUtils.clone(DepthOfFieldShader.uniforms),
+      vertexShader: DepthOfFieldShader.vertexShader,
+      fragmentShader: DepthOfFieldShader.fragmentShader,
+    });
+    dofPass.enabled = false;
+    composer.addPass(dofPass);
+    dofPassRef.current = dofPass;
+
+    // 色彩校正
+    const colorCorrectionPass = new ShaderPass({
+      uniforms: THREE.UniformsUtils.clone(colorCorrectionShader.uniforms),
+      vertexShader: colorCorrectionShader.vertexShader,
+      fragmentShader: colorCorrectionShader.fragmentShader,
+    });
+    composer.addPass(colorCorrectionPass);
+    colorCorrectionPassRef.current = colorCorrectionPass;
+
+    // 输出通道
+    const outputPass = new OutputPass();
+    composer.addPass(outputPass);
+    outputPassRef.current = outputPass;
     
     scene.background = backgroundMode === 'solid' ? new THREE.Color(backgroundColor) : null;
     renderer.setClearAlpha(backgroundMode === 'blur' ? 0 : 1);
@@ -703,9 +1024,16 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
           uBakedTexture: { value: bakedRT.texture },
           uDepthMap: { value: depthTex },
           uDepthMultiplier: { value: depthMultiplier },
+          uMetalness: { value: 0.0 },
+          uRoughness: { value: 0.8 },
+          uNormalStrength: { value: 1.0 },
+          uEmissiveIntensity: { value: 0.0 },
+          uEmissiveColor: { value: new THREE.Color(0xffffff) },
+          uOpacity: { value: 1.0 },
         },
         vertexShader: liveVertexShader,
         fragmentShader: liveFragmentShader,
+        transparent: true,
       });
       liveMaterialRef.current = liveMaterial;
 
