@@ -175,7 +175,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
     const [depthMapFile, setDepthMapFile] = useState<File | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const { toast } = useToast();
-    const defaultApiUrl = 'https://depth-anything-depth-anything-v2.hf.space';
+    const defaultApiUrl = 'https://depth-anything-depth-anything-v2.hf.space/gradio_api';
     const [apiUrl, setApiUrl] = useState(defaultApiUrl);
     
     // Local generation state
@@ -190,7 +190,12 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
 
     useEffect(() => {
         try {
-            const savedApiUrl = localStorage.getItem('depthApiUrl');
+            let savedApiUrl = localStorage.getItem('depthApiUrl');
+            // 迁移旧的默认地址：补上 /gradio_api 后缀
+            if (savedApiUrl && savedApiUrl === 'https://depth-anything-depth-anything-v2.hf.space') {
+                savedApiUrl = 'https://depth-anything-depth-anything-v2.hf.space/gradio_api';
+                localStorage.setItem('depthApiUrl', savedApiUrl);
+            }
             if (savedApiUrl) setApiUrl(savedApiUrl);
             
             const savedUseLocal = localStorage.getItem('useLocalGenerator');
@@ -409,7 +414,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 if (outputData && Array.isArray(outputData) && outputData.length > 1) {
                     const image2 = outputData[1];
                     if(image2 && image2.url){
-                        const resultUrl = image2.url.replace('/cal', '');
+                        const resultUrl = image2.url;
                         try {
                             const imageResponse = await fetch(resultUrl);
                             if (!imageResponse.ok) {
@@ -481,7 +486,10 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                     <Input
                         id="api-url"
                         value={apiUrl}
-                        onChange={(e) => setApiUrl(e.target.value)}
+                        onChange={(e) => {
+                            setApiUrl(e.target.value);
+                            try { localStorage.setItem('depthApiUrl', e.target.value); } catch (error) { console.error("Failed to save apiUrl to localStorage", error); }
+                        }}
                         placeholder={defaultApiUrl}
                     />
                 </div>
