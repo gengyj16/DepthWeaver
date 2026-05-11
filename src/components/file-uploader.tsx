@@ -15,6 +15,58 @@ import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+// Spectral_r colormap forward LUT: 256 grayscale -> RGB (from matplotlib)
+const SPECTRAL_R_FORWARD_LUT: Uint8Array = (() => {
+    const lut = new Uint8Array(256 * 3);
+    const stops: [number, number, number][] = [[94,79,162],[92,81,163],[90,83,164],[88,85,165],[87,87,166],[85,90,167],[83,92,168],[81,94,169],[80,96,170],[78,99,171],[76,101,172],[75,103,173],[73,105,174],[71,108,175],[69,110,176],[68,112,177],[66,114,178],[64,117,180],[62,119,181],[61,121,182],[59,123,183],[57,125,184],[56,128,185],[54,130,186],[52,132,187],[50,134,188],[51,137,188],[53,139,187],[55,141,186],[57,143,185],[59,146,184],[61,148,183],[63,150,182],[65,153,181],[67,155,181],[69,157,180],[71,159,179],[73,162,178],[75,164,177],[77,166,176],[79,168,175],[81,171,174],[83,173,173],[85,175,172],[87,178,171],[89,180,170],[91,182,169],[93,184,168],[95,187,167],[97,189,166],[99,191,165],[102,194,165],[104,195,164],[107,196,164],[110,197,164],[112,198,164],[115,199,164],[118,200,164],[120,201,164],[123,202,164],[126,203,164],[129,204,164],[131,205,164],[134,206,164],[137,207,164],[139,208,164],[142,209,164],[145,210,164],[148,212,164],[150,213,164],[153,214,164],[156,215,164],[158,216,164],[161,217,164],[164,218,164],[166,219,164],[169,220,164],[172,221,163],[174,222,163],[176,223,162],[179,224,162],[181,225,161],[183,226,161],[186,227,160],[188,228,160],[190,229,160],[192,229,159],[195,230,159],[197,231,158],[199,232,158],[202,233,157],[204,234,157],[206,235,156],[209,236,156],[211,237,155],[213,238,155],[216,239,154],[218,240,154],[220,241,153],[223,242,153],[225,243,152],[227,244,152],[230,245,152],[230,245,153],[231,245,155],[232,246,156],[233,246,158],[234,246,159],[235,247,161],[236,247,162],[237,248,164],[238,248,165],[239,248,167],[240,249,168],[241,249,170],[242,250,171],[243,250,173],[244,250,174],[245,251,176],[246,251,178],[247,252,179],[248,252,181],[249,252,182],[250,253,184],[251,253,185],[252,254,187],[253,254,188],[254,254,190],[254,254,189],[254,253,187],[254,251,185],[254,250,183],[254,249,181],[254,248,179],[254,247,177],[254,245,175],[254,244,173],[254,243,171],[254,242,169],[254,241,167],[254,239,165],[254,238,163],[254,237,161],[254,236,159],[254,234,157],[254,233,155],[254,232,153],[254,231,151],[254,230,149],[254,228,147],[254,227,145],[254,226,143],[254,225,141],[254,224,139],[253,222,137],[253,220,135],[253,218,134],[253,216,132],[253,214,130],[253,212,129],[253,210,127],[253,208,125],[253,206,124],[253,204,122],[253,202,120],[253,200,119],[253,198,117],[253,196,115],[253,194,114],[253,192,112],[253,190,111],[253,188,109],[253,186,107],[253,184,106],[253,182,104],[253,180,102],[253,178,101],[253,176,99],[253,174,97],[252,172,96],[252,170,95],[252,167,94],[251,165,92],[251,162,91],[251,159,90],[250,157,89],[250,154,88],[250,152,87],[249,149,85],[249,147,84],[248,144,83],[248,142,82],[248,139,81],[247,137,79],[247,134,78],[247,131,77],[246,129,76],[246,126,75],[246,124,74],[245,121,72],[245,119,71],[245,116,70],[244,114,69],[244,111,68],[244,109,67],[242,107,67],[241,105,67],[240,103,68],[239,101,68],[237,99,69],[236,97,69],[235,96,70],[234,94,70],[233,92,71],[231,90,71],[230,88,72],[229,86,72],[228,85,73],[226,83,73],[225,81,74],[224,79,74],[223,77,75],[222,75,75],[220,73,75],[219,72,76],[218,70,76],[217,68,77],[216,66,77],[214,64,78],[213,62,78],[211,60,78],[209,58,78],[207,56,77],[205,53,77],[203,51,76],[201,48,76],[198,46,75],[196,44,75],[194,41,74],[192,39,74],[190,36,73],[188,34,73],[186,32,72],[183,29,72],[181,27,71],[179,24,71],[177,22,70],[175,20,70],[173,17,69],[170,15,69],[168,12,68],[166,10,68],[164,8,67],[162,5,67],[160,3,66],[158,1,66]];
+    for (let i = 0; i < 256; i++) {
+        lut[i * 3] = stops[i][0];
+        lut[i * 3 + 1] = stops[i][1];
+        lut[i * 3 + 2] = stops[i][2];
+    }
+    return lut;
+})();
+
+function convertColoredDepthToGrayscale(imageData: ImageData): ImageData {
+    const { data, width, height } = imageData;
+    const gray = new Uint8ClampedArray(width * height);
+    const lut = SPECTRAL_R_FORWARD_LUT;
+
+    for (let i = 0; i < width * height; i++) {
+        const r = data[i * 4];
+        const g = data[i * 4 + 1];
+        const b = data[i * 4 + 2];
+
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        // Find closest color in Spectral_r LUT
+        for (let j = 0; j < 256; j++) {
+            const lr = lut[j * 3];
+            const lg = lut[j * 3 + 1];
+            const lb = lut[j * 3 + 2];
+            const dr = r - lr;
+            const dg = g - lg;
+            const db = b - lb;
+            const dist = dr * dr + dg * dg + db * db;
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestIdx = j;
+            }
+        }
+        gray[i] = bestIdx;
+    }
+
+    // Convert single-channel grayscale to RGBA
+    const rgba = new Uint8ClampedArray(width * height * 4);
+    for (let i = 0; i < width * height; i++) {
+        rgba[i * 4] = gray[i];
+        rgba[i * 4 + 1] = gray[i];
+        rgba[i * 4 + 2] = gray[i];
+        rgba[i * 4 + 3] = 255;
+    }
+    return new ImageData(rgba, width, height);
+}
+
 interface FileUploaderProps {
     onFilesSelected: (image: File, depthMap: File) => void;
 }
@@ -363,6 +415,8 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
         let eventSource: EventSource | null = null;
         
         const effectiveApiUrl = currentApiUrl || defaultApiUrl;
+        const isDepthPro = effectiveApiUrl.toLowerCase().includes('depthpro');
+        const endpointName = isDepthPro ? 'run' : 'on_submit';
 
         try {
             const formData = new FormData();
@@ -386,7 +440,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 data: [{ path: uploadResult[0] }]
             };
 
-            const postResponse = await fetch(`${effectiveApiUrl}/call/on_submit`, {
+            const postResponse = await fetch(`${effectiveApiUrl}/call/${endpointName}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestData)
@@ -403,7 +457,7 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 throw new Error('无法从响应中获取 event_id。');
             }
 
-            eventSource = new EventSource(`${effectiveApiUrl}/call/on_submit/${eventId}`);
+            eventSource = new EventSource(`${effectiveApiUrl}/call/${endpointName}/${eventId}`);
             
             eventSource.addEventListener('complete', async (event) => {
                 if (eventSource) eventSource.close();
@@ -411,29 +465,79 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                 const dataStr = (event as MessageEvent).data;
                 const outputData = JSON.parse(dataStr);
                 
-                if (outputData && Array.isArray(outputData) && outputData.length > 1) {
-                    const image2 = outputData[1];
-                    if(image2 && image2.url){
-                        const resultUrl = image2.url;
-                        try {
-                            const imageResponse = await fetch(resultUrl);
-                            if (!imageResponse.ok) {
-                                throw new Error(`下载深度图失败，状态码: ${imageResponse.status}`);
-                            }
-                            const imageBlob = await imageResponse.blob();
-                            const generatedFile = new File([imageBlob], "generated-depth-map.png", { type: imageBlob.type });
-                            setDepthMapFile(generatedFile);
-                            toast({ title: "成功", description: "深度图已生成并载入。" });
-                        } catch(e) {
-                             if (e instanceof Error) {
-                                toast({ variant: "destructive", title: "错误", description: `下载生成的深度图时出错: ${e.message}. ${errorHint}` });
-                            }
+                // DepthPro: outputData[0] is [original, coloredDepth], outputData[1..4] are text
+                // Depth-Anything: outputData[0] is [img1, img2] slider, outputData[1] is grayscale depth file
+                let depthImageUrl: string | null = null;
+                
+                if (isDepthPro) {
+                    // DepthPro: depth map is the second image in the ImageSlider at outputData[0]
+                    if (outputData && Array.isArray(outputData) && outputData.length > 0) {
+                        const slider = outputData[0];
+                        if (Array.isArray(slider) && slider.length > 1 && slider[1] && slider[1].url) {
+                            depthImageUrl = slider[1].url;
                         }
-                    } else {
-                         throw new Error('API返回结果格式不正确，缺少URL。');
                     }
                 } else {
-                    throw new Error('API返回结果格式不正确。');
+                    // Depth-Anything: depth map is a separate FileData at outputData[1]
+                    if (outputData && Array.isArray(outputData) && outputData.length > 1) {
+                        const image2 = outputData[1];
+                        if (image2 && image2.url) {
+                            depthImageUrl = image2.url;
+                        }
+                    }
+                }
+
+                if (!depthImageUrl) {
+                    toast({ variant: "destructive", title: "错误", description: `API返回结果格式不正确。 ${errorHint}` });
+                    setIsGenerating(false);
+                    return;
+                }
+
+                try {
+                    const imageResponse = await fetch(depthImageUrl);
+                    if (!imageResponse.ok) {
+                        throw new Error(`下载深度图失败，状态码: ${imageResponse.status}`);
+                    }
+                    const imageBlob = await imageResponse.blob();
+                    
+                    if (isDepthPro) {
+                        // DepthPro returns colored depth map, convert to grayscale
+                        const img = new Image();
+                        const objectUrl = URL.createObjectURL(imageBlob);
+                        await new Promise<void>((resolve, reject) => {
+                            img.onload = () => resolve();
+                            img.onerror = () => reject(new Error('加载深度图失败'));
+                            img.src = objectUrl;
+                        });
+                        URL.revokeObjectURL(objectUrl);
+                        
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) throw new Error('无法创建Canvas上下文');
+                        ctx.drawImage(img, 0, 0);
+                        
+                        const coloredData = ctx.getImageData(0, 0, img.width, img.height);
+                        const grayData = convertColoredDepthToGrayscale(coloredData);
+                        
+                        ctx.putImageData(grayData, 0, 0);
+                        const grayBlob = await new Promise<Blob>((resolve, reject) => {
+                            canvas.toBlob((b) => b ? resolve(b) : reject(new Error('Canvas转换失败')), 'image/png');
+                        });
+                        
+                        const generatedFile = new File([grayBlob], "generated-depth-map.png", { type: "image/png" });
+                        setDepthMapFile(generatedFile);
+                    } else {
+                        const generatedFile = new File([imageBlob], "generated-depth-map.png", { type: imageBlob.type });
+                        setDepthMapFile(generatedFile);
+                    }
+                    
+                    toast({ title: "成功", description: "深度图已生成并载入。" });
+                } catch(e) {
+                     if (e instanceof Error) {
+                        toast({ variant: "destructive", title: "错误", description: `下载生成的深度图时出错: ${e.message}. ${errorHint}` });
+                    }
                 }
                 setIsGenerating(false);
             });
@@ -483,6 +587,20 @@ export function FileUploader({ onFilesSelected }: FileUploaderProps) {
                     <Label htmlFor="api-url" className="text-sm font-bold">
                         服务器API 地址
                     </Label>
+                    <button
+                        type="button"
+                        className="text-sm text-primary underline cursor-pointer hover:text-primary/80"
+                        onClick={() => {
+                            const isDepthPro = apiUrl.toLowerCase().includes('depthpro');
+                            const newUrl = isDepthPro
+                                ? 'https://depth-anything-depth-anything-v2.hf.space/gradio_api'
+                                : 'https://hysts-depthpro-transformers.hf.space/gradio_api';
+                            setApiUrl(newUrl);
+                            try { localStorage.setItem('depthApiUrl', newUrl); } catch (error) { console.error("Failed to save apiUrl to localStorage", error); }
+                        }}
+                    >
+                        {apiUrl.toLowerCase().includes('depthpro') ? '切换回 Depth Anything V2' : '切换到 Depth Pro'}
+                    </button>
                     <Input
                         id="api-url"
                         value={apiUrl}
