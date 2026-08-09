@@ -20,6 +20,7 @@ test('depth-guided fill reconstructs the near side of an occlusion edge', () => 
   const result = prepareDepthGuidedBackground(image, depth, width, height, { edgeThreshold: 0.08, fillRadius: 6 });
   const pixel = Math.floor(height / 2) * width + split + 2;
   assert.ok(result.maskedPixelCount > 0);
+  assert.equal(result.layerCount, 1);
   assert.equal(result.mask[pixel], 255);
   assert.ok(result.background[pixel * 4 + 2] > result.background[pixel * 4]);
   assert.equal(result.background[pixel * 4 + 3], 255);
@@ -44,7 +45,33 @@ test('flat depth maps do not create an inpainting mask', () => {
   const depth = makeRgba(width, height, () => [128, 128, 128, 255]);
   const result = prepareDepthGuidedBackground(image, depth, width, height, { edgeThreshold: 0.08, fillRadius: 5 });
   assert.equal(result.maskedPixelCount, 0);
+  assert.equal(result.layerCount, 0);
   assert.deepEqual(result.background, image);
+});
+
+test('layered fill keeps overlapping occlusion bands separated', () => {
+  const width = 40, height = 24;
+  const image = makeRgba(width, height, (x) => {
+    if (x < 10) return [20, 60, 220, 255];
+    if (x < 22) return [30, 210, 70, 255];
+    return [230, 40, 25, 255];
+  });
+  const depth = makeRgba(width, height, (x) => {
+    const value = x < 10 ? 25 : x < 22 ? 120 : 230;
+    return [value, value, value, 255];
+  });
+
+  const result = prepareDepthGuidedBackground(image, depth, width, height, {
+    edgeThreshold: 0.08,
+    fillRadius: 7,
+  });
+  const row = Math.floor(height / 2) * width;
+  const firstBand = (row + 12) * 4;
+  const secondBand = (row + 24) * 4;
+
+  assert.equal(result.layerCount, 2);
+  assert.ok(result.background[firstBand + 2] > result.background[firstBand + 1]);
+  assert.ok(result.background[secondBand + 1] > result.background[secondBand]);
 });
 
 test('maskToRgba emits an opaque grayscale mask', () => {

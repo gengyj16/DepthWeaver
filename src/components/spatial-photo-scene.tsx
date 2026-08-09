@@ -359,8 +359,9 @@ export const SpatialPhotoScene = forwardRef<DepthWeaverSceneHandle, SpatialPhoto
               version: SPATIAL_ASSET_VERSION,
               width,
               height,
-              method: 'depth-fill',
+              method: 'layered-depth-fill',
               maskedPixelCount: result.maskedPixelCount as number,
+              layerCount: result.layerCount as number,
             },
           });
           setStatus(null);
@@ -419,7 +420,7 @@ export const SpatialPhotoScene = forwardRef<DepthWeaverSceneHandle, SpatialPhoto
             mask: maskBlob,
             metadata: {
               ...assets.metadata,
-              method: result.provider === 'none' ? 'depth-fill' : 'migan',
+              method: result.provider === 'none' ? 'layered-depth-fill' : 'migan',
             },
           });
           setStatus(null);
@@ -698,7 +699,7 @@ export const SpatialPhotoScene = forwardRef<DepthWeaverSceneHandle, SpatialPhoto
 
     const methodLabel = (assets?.metadata.method as SpatialInpaintMethod | undefined) === 'migan'
       ? 'AI 背景补全已完成'
-      : '深度定向补全';
+      : `深度感知分层补全（${assets?.metadata.layerCount ?? 0} 层）`;
 
     return (
       <>

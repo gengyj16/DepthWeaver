@@ -58,7 +58,7 @@ type RenderMode = 'blur' | 'fill';
 type CameraType = 'perspective' | 'orthographic';
 type ViewerMode = 'classic' | 'spatial';
 
-function createSpatialAssetUrls(entry: Pick<SpatialAssetsDbEntry, 'background' | 'mask' | 'version' | 'width' | 'height' | 'method' | 'maskedPixelCount'>): SpatialPhotoAssetUrls {
+function createSpatialAssetUrls(entry: Pick<SpatialAssetsDbEntry, 'background' | 'mask' | 'version' | 'width' | 'height' | 'method' | 'maskedPixelCount' | 'layerCount'>): SpatialPhotoAssetUrls {
   return {
     backgroundUrl: URL.createObjectURL(entry.background),
     maskUrl: URL.createObjectURL(entry.mask),
@@ -68,6 +68,7 @@ function createSpatialAssetUrls(entry: Pick<SpatialAssetsDbEntry, 'background' |
       height: entry.height,
       method: entry.method,
       maskedPixelCount: entry.maskedPixelCount,
+      layerCount: entry.layerCount,
     },
   };
 }
@@ -769,8 +770,9 @@ export default function HomePage() {
 
                           {spatialAssets && (
                             <p className="rounded-md bg-background/30 px-3 py-2 text-xs text-muted-foreground">
-                              当前资源：{spatialAssets.metadata.method === 'migan' ? 'MI-GAN AI 补全' : '深度定向快速补全'}
+                              当前资源：{spatialAssets.metadata.method === 'migan' ? 'MI-GAN AI 补全' : '深度感知分层补全'}
                               {' · '}{spatialAssets.metadata.width}×{spatialAssets.metadata.height}
+                              {' · '}{spatialAssets.metadata.layerCount} 个深度层
                               {' · '}补全 {spatialAssets.metadata.maskedPixelCount.toLocaleString()} 像素
                             </p>
                           )}
