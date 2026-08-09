@@ -256,6 +256,7 @@ workerScope.onmessage = async (event: MessageEvent<SpatialWorkerRequest>) => {
             width: result.width,
             height: result.height,
             maskedPixelCount: result.maskedPixelCount,
+            layerCount: result.layerCount,
           },
         },
         [result.background.buffer, result.mask.buffer],

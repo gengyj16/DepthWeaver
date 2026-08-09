@@ -50,6 +50,6 @@ npm run build
 
 ## 技术与许可证说明
 
-空间照片方案的技术调研、取舍和边界见 [`docs/spatial-photo-architecture.md`](docs/spatial-photo-architecture.md)。
+空间照片会依据遮挡边缘将远景量化为独立深度层，再在层内定向修补，避免多个前后景交叠时发生颜色串层。方案的技术调研、取舍和边界见 [`docs/spatial-photo-architecture.md`](docs/spatial-photo-architecture.md)。
 
 MI-GAN 的官方实现采用 MIT License。本仓库不包含模型权重，浏览器首次使用时从配置的模型地址下载并缓存。其他调研项目仅用于验证技术路线，没有复制 GPL/AGPL 项目代码。
