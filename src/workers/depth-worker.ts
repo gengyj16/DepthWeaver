@@ -1,31 +1,37 @@
 
 // In a dedicated worker file, e.g., src/workers/depth-worker.ts
 import { pipeline, env } from '@huggingface/transformers';
-import type { Pipeline } from '@huggingface/transformers';
+import type { DepthEstimationPipeline as TransformersDepthEstimationPipeline } from '@huggingface/transformers';
 
 // Configure the environment
 env.allowRemoteModels = true;
 env.useFS = false; 
-env.useCache = true;
+env.useBrowserCache = true;
 
 class DepthEstimationPipeline {
-    static task = 'depth-estimation';
-    static instance: Pipeline | null = null;
+    static task = 'depth-estimation' as const;
+    static instance: TransformersDepthEstimationPipeline | null = null;
     static model: string | null = null;
-    static device: string | null = null;
+    static device: 'wasm' | 'webgpu' | null = null;
     static initialized = false;
     static device_checked = false;
 
-    static async getInstance(model: string, useMirror: boolean, progress_callback?: Function) {
+    static async getInstance(
+        model: string,
+        useMirror: boolean,
+        progress_callback?: (progress: any) => void,
+    ) {
         
         env.remoteHost = useMirror ? "https://www.modelscope.cn/models" : "https://huggingface.co";
 
         if (!this.device_checked) {
              let device: 'wasm' | 'webgpu' = 'wasm';
-            // @ts-ignore
-            if (typeof self.navigator !== 'undefined' && self.navigator.gpu) {
+            const workerNavigator = self.navigator as Navigator & {
+                gpu?: { requestAdapter: () => Promise<unknown> };
+            };
+            if (typeof workerNavigator !== 'undefined' && workerNavigator.gpu) {
                 try {
-                    const adapter = await self.navigator.gpu.requestAdapter();
+                    const adapter = await workerNavigator.gpu.requestAdapter();
                     if (adapter) {
                        device = 'webgpu';
                     }
@@ -47,7 +53,18 @@ class DepthEstimationPipeline {
             this.model = model;
             this.initialized = false;
             try {
-                this.instance = await pipeline(this.task, model, { progress_callback, device: this.device || 'wasm' });
+                const createDepthPipeline = pipeline as unknown as (
+                    task: 'depth-estimation',
+                    modelName: string,
+                    options: {
+                        progress_callback?: (progress: any) => void;
+                        device: 'wasm' | 'webgpu';
+                    },
+                ) => Promise<TransformersDepthEstimationPipeline>;
+                this.instance = await createDepthPipeline(this.task, model, {
+                    progress_callback,
+                    device: this.device || 'wasm',
+                });
                 this.initialized = true;
             } catch(e) {
                 this.instance = null;

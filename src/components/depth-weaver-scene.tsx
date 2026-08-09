@@ -469,7 +469,8 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   }, [depthMultiplier, cameraDistance, orthographicZoom, backgroundMode, backgroundColor, requestRenderIfNotRequested]);
 
   useEffect(() => {
-    if (meshRef.current && meshRef.current.geometry.parameters.widthSegments !== meshDetail) {
+    const geometry = meshRef.current?.geometry as THREE.PlaneGeometry | undefined;
+    if (meshRef.current && geometry?.parameters.widthSegments !== meshDetail) {
       meshRef.current.geometry.dispose();
       meshRef.current.geometry = new THREE.PlaneGeometry(2, 2, meshDetail, meshDetail);
       requestRenderIfNotRequested();
@@ -550,8 +551,11 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
         initialOrientationRef.current = { beta: event.beta, gamma: event.gamma };
       }
       
-      const beta = event.beta - initialOrientationRef.current.beta;
-      const gamma = event.gamma - initialOrientationRef.current.gamma;
+      const initialBeta = initialOrientationRef.current.beta;
+      const initialGamma = initialOrientationRef.current.gamma;
+      if (initialBeta === null || initialGamma === null) return;
+      const beta = event.beta - initialBeta;
+      const gamma = event.gamma - initialGamma;
 
       const maxAngle = maxAngleRef.current;
       const smoothingFactor = 0.1;
@@ -587,16 +591,8 @@ export const DepthWeaverScene = forwardRef<DepthWeaverSceneHandle, DepthWeaverSc
   useEffect(() => {
     const currentMount = mountRef.current;
     if (useSensor) {
-      if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
-        (DeviceOrientationEvent as any).requestPermission()
-          .then((permissionState: string) => {
-            if (permissionState === 'granted') {
-              window.addEventListener('deviceorientation', handleDeviceOrientation);
-            }
-          });
-      } else {
-        window.addEventListener('deviceorientation', handleDeviceOrientation);
-      }
+      // Permission is requested by the settings switch inside the user gesture.
+      window.addEventListener('deviceorientation', handleDeviceOrientation);
       if(currentMount) currentMount.style.cursor = 'default';
     } else {
       initialOrientationRef.current = { beta: null, gamma: null };
